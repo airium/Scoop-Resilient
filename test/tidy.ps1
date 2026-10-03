@@ -8,7 +8,7 @@ $log = Join-Path $temp 'calls.log'
 $variables = @('SCOOP_UPGRADE_SCOOP_COMMAND', 'SCOOP_RESILIENT_SCOOP_COMMAND', 'SCOOP_RESILIENT_TEST_LOG', 'SCOOP_RESILIENT_TEST_APPS',
     'SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR', 'SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE', 'SCOOP_RESILIENT_TEST_ELEVATION_BYPASS',
     'SCOOP_RESILIENT_TEST_ROOT', 'SCOOP_RESILIENT_TEST_CORE', 'SCOOP_RESILIENT_TEST_GLOBAL_APPS',
-    'SCOOP_RESILIENT_TEST_NO_JUNCTION', 'SCOOP_RESILIENT_TEST_DELETE_FAILURE', 'SCOOP_RESILIENT_TEST_NATIVE_SCOOP',
+    'SCOOP_RESILIENT_TEST_NO_JUNCTION', 'SCOOP_RESILIENT_TEST_DELETE_FAILURE', 'SCOOP_RESILIENT_TEST_NATIVE_SCOOP', 'SCOOP_RESILIENT_TEST_WORKER_LOG',
     'SCOOP', 'SCOOP_GLOBAL', 'SCOOP_CACHE', 'XDG_CONFIG_HOME')
 $previous = @{}
 foreach ($name in $variables) { $previous[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -54,6 +54,7 @@ function Reset-TestInstallation {
     $env:SCOOP_RESILIENT_TEST_DELETE_FAILURE = ''
     $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP = ''
     New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache') -Force | Out-Null
+    $env:SCOOP_RESILIENT_TEST_WORKER_LOG = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'workers.log'
 }
 function Invoke-TestTidy {
     param([string[]] $Options = @('-a'))
@@ -252,6 +253,8 @@ try {
             $env:XDG_CONFIG_HOME = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'config'
             $broken = New-TestApp broken -Version '1.0'
             $healthy = New-TestApp healthy
+            New-Item -ItemType Directory -Path (Join-Path $env:SCOOP 'apps/scoop') -Force | Out-Null
+            New-TestLink -Path (Join-Path $env:SCOOP 'apps/scoop/current') -Target $realCore
             New-Item -ItemType Directory -Path (Join-Path $env:SCOOP 'shims'), (Join-Path $env:SCOOP_GLOBAL 'apps') -Force | Out-Null
             New-TestFile -Path (Join-Path $env:XDG_CONFIG_HOME 'scoop/config.json') -Contents (@{last_update=[DateTime]::Now.ToString('o');aria2_enabled=$false} | ConvertTo-Json)
             $main = Join-Path $env:SCOOP 'buckets/main'
@@ -301,6 +304,66 @@ try {
             Assert-Tidy (!(Test-Path (Join-Path $healthy '1.0'))) 'A real lock must not block other apps.'
         } finally { $lock.Dispose() }
     }
+    $names = @(1..50 | ForEach-Object { "clean-$_" })
+    Reset-TestInstallation ($names -join ',')
+    foreach ($name in $names) {
+        $app = New-TestApp $name
+        Remove-Item -LiteralPath (Join-Path $app '1.0'), (Join-Path $app '1.5') -Recurse -Force
+    }
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $result = Invoke-TestTidy -Options @('-ak')
+    $timer.Stop()
+    Assert-Tidy ($result.Code -eq 0) $result.Output
+    $trace = @(Get-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG)
+    Assert-Tidy (($trace -join '|') -eq 'preflight tidy|cache-scan') 'An entirely clean selection should use one preflight, one cache scan, and zero cleanup workers.'
+    Assert-Tidy ($result.Output.Contains('Current: 50')) 'Clean apps must retain accurate summary counts.'
+    Write-Host "50 clean apps: one preflight, zero tidy workers, $($timer.ElapsedMilliseconds) ms."
+
+    Reset-TestInstallation 'healthy'
+    $healthy = New-TestApp healthy
+    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    foreach ($file in @('healthy#1.0#old.zip', 'healthy#2.0#keep.zip', 'orphan.download')) { New-TestFile -Path (Join-Path $cache $file) }
+    $result = Invoke-TestTidy -Options @('-ak')
+    Assert-Tidy ($result.Code -eq 0) $result.Output
+    $trace = @(Get-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG)
+    Assert-Tidy (@($trace | Where-Object { $_ -eq 'cache-scan' }).Count -eq 1) 'A mixed batch must scan cache once.'
+    Assert-Tidy (@($trace | Where-Object { $_ -like 'tidy *' }).Count -eq 2) 'Only the app cleanup and partial download job should launch workers.'
+    Assert-Tidy (Test-Path (Join-Path $cache 'healthy#2.0#keep.zip')) 'Planned cleanup must protect active cache files.'
+
+    Reset-TestInstallation 'healthy'
+    $healthy = New-TestApp healthy
+    Remove-Item -LiteralPath (Join-Path $healthy '1.0'), (Join-Path $healthy '1.5') -Recurse -Force
+    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    New-TestFile -Path (Join-Path $cache 'healthy#1.0#old.zip')
+    $result = Invoke-TestTidy -Options @('-ak')
+    Assert-Tidy ($result.Code -eq 0) $result.Output
+    Assert-Tidy (!(Test-Path (Join-Path $cache 'healthy#1.0#old.zip'))) 'Cache-only jobs must not require obsolete version directories.'
+
+    Reset-TestInstallation 'healthy'
+    $healthy = New-TestApp healthy
+    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain-after-switch.zip')
+    . (Join-Path $project 'lib/common.ps1')
+    . (Join-Path $project 'lib/commands.ps1')
+    $script:EntryPoint = Join-Path $project 'scoop-tidy.ps1'
+    $script:Operation = 'tidy'
+    $script:CoreDirectory = $env:SCOOP_RESILIENT_TEST_CORE
+    $script:ForwardOptions = @('--cache')
+    $plan = Invoke-PreflightProcess -Targets @([PSCustomObject]@{ Name = 'healthy'; Global = $false; Info = '' })
+    Assert-Tidy ($null -ne $plan -and $plan.Jobs.Count -eq 1) 'Expected one planned job before changing state.'
+    Set-TidyJobPlan -Jobs @($plan.Jobs)
+    New-TestFile -Path (Join-Path $healthy '1.0/scoop-manifest.json') -Contents '{"version":"1.0"}'
+    New-TestFile -Path (Join-Path $healthy '1.0/scoop-install.json') -Contents '{"architecture":"64bit"}'
+    [IO.Directory]::Delete((Join-Path $healthy 'current'), $false)
+    New-TestLink -Path (Join-Path $healthy 'current') -Target (Join-Path $healthy '1.0')
+    New-TestFile -Path (Join-Path $healthy '3.0/in-progress.txt')
+    $outcomes = @(Invoke-TidyProcess -Name healthy -Global $false)
+    Assert-Tidy (@($outcomes | Where-Object { $_.Status -eq 'Failed' }).Count -eq 0) ($outcomes | ConvertTo-Json)
+    Assert-Tidy (Test-Path (Join-Path $healthy '1.0/old.txt')) 'A version that became current after planning must survive.'
+    Assert-Tidy (Test-Path (Join-Path $cache 'healthy#1.0#retain-after-switch.zip')) 'A cache file that became current after planning must survive.'
+    Assert-Tidy (Test-Path (Join-Path $healthy '3.0/in-progress.txt')) 'Directories created after planning must be deferred rather than removed.'
+    Assert-Tidy (!(Test-Path (Join-Path $healthy '1.5'))) 'Other planned obsolete versions should still be removed.'
+
     Write-Host 'All scoop-tidy filesystem and integration tests passed.' -ForegroundColor Green
 } finally {
     # Use the same non-traversing primitive so teardown cannot delete a junction's target.

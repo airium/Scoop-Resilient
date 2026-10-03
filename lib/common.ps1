@@ -304,6 +304,10 @@ function Write-ResultSection {
     $items = @($Results | Where-Object { $_.Status -eq $Status })
     $displayStatus = if ($script:Operation -eq 'tidy' -and $Status -eq 'Completed') { 'Removed' } else { $Status }
     Write-Host ("  {0}: {1}" -f $displayStatus, $items.Count) -ForegroundColor $Color
+    if ($Status -eq 'Current' -and $items.Count -gt 10 -and $script:Options.All) {
+        Write-Host '    No mutation workers were needed for these apps.' -ForegroundColor $Color
+        return
+    }
     foreach ($item in $items) {
         $exitText = if ($item.ExitCode -ne 0) { " (exit $($item.ExitCode))" } else { '' }
         Write-Host "    - $($item.Label) [$($item.Category)]$exitText" -ForegroundColor $Color
@@ -398,6 +402,11 @@ function Invoke-ElevatedWorkerMode {
         if ($script:Operation -notin @('upgrade', 'tidy')) { throw 'Invalid worker operation.' }
         $script:ForwardOptions = @($request.Options)
         $script:CoreDirectory = [string] $request.CoreDirectory
+        Set-TidyJobPlan -Jobs @()
+        if ($request.TidyPlanPath) {
+            $jobPlan = Get-Content -LiteralPath $request.TidyPlanPath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
+            Set-TidyJobPlan -Jobs @($jobPlan.Jobs)
+        }
         foreach ($nameValue in @($request.Apps)) {
             $name = [string] $nameValue
             if ($name -notmatch '^[A-Za-z0-9_.-]+$') {
@@ -481,12 +490,18 @@ function Invoke-ElevatedBatch {
     $resultFile = Join-Path $tempDirectory 'result.json'
     try {
         New-Item -ItemType Directory -Path $tempDirectory -ErrorAction Stop | Out-Null
+        $tidyPlanPath = ''
+        if ($script:Operation -eq 'tidy' -and $script:TidyJobs.Count) {
+            $tidyPlanPath = Join-Path $tempDirectory 'tidy-plan.json'
+            Write-JsonFile -Path $tidyPlanPath -Value @{ Jobs = @($script:TidyJobs.Values | Where-Object { $_.Global -and $_.Name -in $Apps }) }
+        }
         $request = @{
             ScoopCommand = $script:ScoopCommand
             Apps = [string[]] $Apps
             Operation = $script:Operation
             Options = [string[]] $script:ForwardOptions
             CoreDirectory = $script:CoreDirectory
+            TidyPlanPath = $tidyPlanPath
         } | ConvertTo-Json -Depth 3 -Compress
         $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($request))
         $hostExecutable = Get-CurrentPowerShellExecutable

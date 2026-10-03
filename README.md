@@ -88,7 +88,7 @@ scoop tidy git -gk              # Clean only the global git installation
 | `-g`, `--global` | Select global scope for named apps. |
 | `-k`, `--cache` | Remove obsolete cache files and leftover `*.download` files. |
 
-Each app runs in an isolated cleanup worker. Workers load the installed Scoop
+Each app with planned removals runs in an isolated cleanup worker. Workers load the installed Scoop
 core's configured paths, but use dedicated cleanup logic instead of invoking
 `scoop cleanup`. Each old version and cache file has its own error handler.
 
@@ -112,6 +112,34 @@ native `cleanup -k`, and failures are reported rather than silently ignored.
 The tidy summary counts individual removed versions/cache files, failures,
 skipped operations, and apps that were already clean. Locked files may remain;
 the command reports them and continues rather than retrying indefinitely.
+
+## Planning and performance
+
+Starting with v0.2.0, both commands use one read-only preflight process to build a
+work list before launching app workers. Scoop's installed libraries are loaded
+once for that preflight. Already-current upgrades and already-clean apps are
+reported immediately, without starting individual mutation workers.
+
+Upgrade uses Scoop's outdated-status logic after any required synchronization.
+`--force` still schedules current apps, and holds remain respected. Inconclusive
+status and remote/custom manifests are left to the isolated update worker for
+diagnosis. If preflight fails, the command explains why and falls back to checking
+the selected apps individually.
+
+Tidy scans the cache once, shares current-version metadata between local/global
+scope checks, and schedules only apps with obsolete versions or cache files.
+Leftover partial downloads use one separate job only when they exist. Cache and
+version candidates are passed through request files, avoiding Windows command-line
+limits for large selections. Current/clean global apps need no elevation.
+
+Mutation workers remain sequential and isolated. Tidy revalidates active versions
+before deleting planned candidates, preserves cache files that became current,
+and leaves newly created directories/files for a later run. These checks protect
+state changes between planning and execution. Long current/clean summary lists
+are collapsed into counts; failures and skips retain their explanations.
+
+Metadata scanning and large deletions still take time. The main saving is avoiding
+repeated PowerShell startup and Scoop initialization for apps with no work.
 
 ## Global apps and elevation
 
@@ -165,13 +193,13 @@ Remove the development shims with `scoop shim rm scoop-upgrade` and
 Generate the bundle and matching manifest:
 
 ```powershell
-./scripts/new-manifest.ps1 -Version 0.1.1 -License MIT
+./scripts/new-manifest.ps1 -Version 0.2.0 -License MIT
 ```
 
-This creates `dist/scoop-resilient-0.1.1.zip` and `bucket/scoop-resilient.json`. The archive
+This creates `dist/scoop-resilient-0.2.0.zip` and `bucket/scoop-resilient.json`. The archive
 contains both entry scripts, shared libraries, and this README. The manifest
 hashes that exact archive and references the corresponding GitHub release asset.
-Upload that same archive as `scoop-resilient-0.1.1.zip` to the `v0.1.1` release after
+Upload that same archive as `scoop-resilient-0.2.0.zip` to the `v0.2.0` release after
 committing the source/manifest and pushing the tag. Regenerating an archive can
 change its hash; regenerate the manifest too, or pass `-ArchivePath` to hash an
 already-built archive. `dist` is ignored by Git.
@@ -192,7 +220,9 @@ The suite checks upgrade argument parity, scopes, freshness, option forwarding,
 failure classification, stderr handling, and elevation. Filesystem tests check
 cleanup continuation within/across apps, current and persisted data preservation,
 legacy/prefixed metadata, `NO_JUNCTION`, cache failures, shared cache retention,
-and global cleanup. Release tests unpack the bundle and execute its entry points.
+and global cleanup. Release tests unpack the bundle and execute both entry points through real Scoop
+shims. Planning tests verify worker counts, force/hold handling, global scope,
+fallback after planner failure, and live-state revalidation before deletion.
 
 CI runs on Windows with Windows PowerShell 5.1 and PowerShell 7, including real
 file-lock and junction cases and an actual Scoop 0.6.0 cached hash failure. The

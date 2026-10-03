@@ -123,6 +123,24 @@ function Add-TidyRemoval {
     }
 }
 
+function Get-TidyPlannedFile {
+    param([string] $Directory, [string[]] $Names, [switch] $Directories)
+    if ($null -eq $Names -or !$Names.Count) { return }
+    foreach ($name in @($Names)) {
+        if (!$name -or $name -in @('.', '..') -or $name.IndexOfAny([char[]]@('/', '\', ':')) -ge 0) {
+            throw 'Invalid planned cleanup name.'
+        }
+        $path = Join-Path $Directory $name
+        try {
+            $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+            if ([bool]$item.PSIsContainer -ne [bool]$Directories) { throw "Planned cleanup item changed type: $name" }
+            $item
+        } catch {
+            if ($_.CategoryInfo.Category -ne [Management.Automation.ErrorCategory]::ObjectNotFound) { throw }
+        }
+    }
+}
+
 function Invoke-TidyApp {
     param($Request, [System.Collections.Generic.List[object]] $Results)
     $name = [string]$Request.Name
@@ -135,7 +153,9 @@ function Invoke-TidyApp {
     }
     $before = $Results.Count
     try {
-        $directories = @(Get-ChildItem -LiteralPath $appDirectory -Directory -Force -ErrorAction Stop)
+        $directories = if ($Request.VersionsPlanned) {
+            @(Get-TidyPlannedFile -Directory $appDirectory -Names @($Request.VersionNames) -Directories)
+        } else { @(Get-ChildItem -LiteralPath $appDirectory -Directory -Force -ErrorAction Stop) }
         foreach ($directory in $directories) {
             if ($directory.Name -eq 'current' -or $directory.Name -eq $version) { continue }
             if ((Get-TidyCurrentVersion -AppDirectory $appDirectory) -ne $version) {
@@ -146,7 +166,7 @@ function Invoke-TidyApp {
     } catch {
         [void]$Results.Add((New-Outcome -Name $name -Global:$global -Status Failed -Category Version -Reason $_.Exception.Message -ExitCode 1))
     }
-    if ($Request.Cache) {
+    if ($Request.Cache -and (!$Request.CachePlanned -or @($Request.CacheNames).Count)) {
         # The download cache is shared by local and global installations. Retain
         # both active versions even when only one installation was selected.
         $retained = @($version)
@@ -161,7 +181,10 @@ function Invoke-TidyApp {
         }
         if ($cacheSafe -and (Test-Path -LiteralPath $cachedir -PathType Container)) {
             try {
-                foreach ($file in Get-ChildItem -LiteralPath $cachedir -File -Force -ErrorAction Stop) {
+                $files = if ($Request.CachePlanned) {
+                    @(Get-TidyPlannedFile -Directory $cachedir -Names @($Request.CacheNames))
+                } else { @(Get-ChildItem -LiteralPath $cachedir -File -Force -ErrorAction Stop) }
+                foreach ($file in $files) {
                     if (!$file.Name.StartsWith("$name#", [StringComparison]::OrdinalIgnoreCase)) { continue }
                     $keep = $false
                     foreach ($currentVersion in $retained) {
@@ -180,10 +203,14 @@ function Invoke-TidyApp {
 }
 
 function Invoke-TidyWorker {
-    param([string] $Payload, [string] $OutputPath)
+    param([string] $RequestPath, [string] $OutputPath)
     $results = [System.Collections.Generic.List[object]]::new()
     try {
-        $request = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Payload)) | ConvertFrom-Json -ErrorAction Stop
+        $request = Get-Content -LiteralPath $RequestPath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
+        if ($env:SCOOP_RESILIENT_TEST_WORKER_LOG) {
+            $kind = if ($request.PartialDownloads) { 'partial-downloads' } else { "$($request.Global)/$($request.Name)" }
+            Add-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG -Value "tidy $kind"
+        }
         if (!$request.PartialDownloads -and ([string]$request.Name -notmatch '^[A-Za-z0-9_.-]+$' -or $request.Name -in @('.', '..', 'scoop'))) {
             throw 'Invalid cleanup app name.'
         }
@@ -197,7 +224,11 @@ function Invoke-TidyWorker {
         if ($request.Global -and !(Test-IsAdministrator)) { throw 'Administrator rights are required for global cleanup.' }
         if ($request.PartialDownloads) {
             if (Test-Path -LiteralPath $cachedir -PathType Container) {
-                foreach ($file in Get-ChildItem -LiteralPath $cachedir -File -Filter '*.download' -Force -ErrorAction Stop) {
+                $files = if ($request.PartialPlanned) {
+                    @(Get-TidyPlannedFile -Directory $cachedir -Names @($request.PartialNames))
+                } else { @(Get-ChildItem -LiteralPath $cachedir -File -Filter '*.download' -Force -ErrorAction Stop) }
+                foreach ($file in $files) {
+                    if (!$file.Name.EndsWith('.download', [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid partial download job.' }
                     Add-TidyRemoval -Path $file.FullName -Label "Partial downloads/$($file.Name)" -Category Cache -Global:$false -Results $results
                 }
             }

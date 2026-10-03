@@ -21,6 +21,11 @@ $script:EntryPoint = $PSCommandPath
 $script:Operation = 'upgrade'
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Continue'
+if ($args.Count -gt 0 -and $args[0] -eq '--internal-plan-worker') {
+    if ($args.Count -ne 3) { Write-Error 'Invalid planning request.'; exit 2 }
+    . "$PSScriptRoot/lib/plan.ps1"
+    exit (Invoke-PreflightWorker -RequestPath $args[1] -OutputPath $args[2])
+}
 if ($args.Count -gt 0 -and $args[0] -eq '--internal-elevated-worker') {
     if ($args.Count -ne 3) { Write-Error 'Invalid elevated worker request.'; exit 2 }
     exit (Invoke-ElevatedWorkerMode -Payload $args[1] -OutputPath $args[2])

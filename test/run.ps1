@@ -118,6 +118,9 @@ function Invoke-Scenario {
     }
 }
 
+$previousCore = $env:SCOOP_RESILIENT_TEST_CORE
+$previousWorkerLog = $env:SCOOP_RESILIENT_TEST_WORKER_LOG
+$previousStatusError = $env:SCOOP_RESILIENT_TEST_STATUS_ERROR
 $previousCommand = $env:SCOOP_UPGRADE_SCOOP_COMMAND
 $previousToolsCommand = $env:SCOOP_RESILIENT_SCOOP_COMMAND
 $previousNativeScoop = $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP
@@ -139,10 +142,15 @@ try {
     $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP = ''
     $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS = ''
     $env:SCOOP_RESILIENT_TEST_LOG = $logPath
+    $env:SCOOP_RESILIENT_TEST_CORE = Join-Path $tempRoot 'core'
+    New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures/plan-core.ps1') -Destination (Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib/core.ps1')
+    $env:SCOOP_RESILIENT_TEST_WORKER_LOG = Join-Path $tempRoot 'workers.log'
+    $env:SCOOP_RESILIENT_TEST_STATUS_ERROR = ''
 
     $partialFailure = Invoke-Scenario -FailApp 'broken'
     Assert-Equal 1 $partialFailure.ExitCode 'A failed app should produce aggregate exit code 1.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update broken', 'update healthy', 'update damaged') $partialFailure.Calls 'A failed app must not prevent the next app update.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update broken', 'update healthy', 'update damaged') $partialFailure.Calls 'A failed app must not prevent the next app update.'
     Assert-Contains $partialFailure.Output 'Completed: 2' 'The summary should count successful updates.'
     Assert-Contains $partialFailure.Output 'Failed: 1' 'The summary should count failed updates.'
     Assert-Contains $partialFailure.Output 'Skipped: 1' 'The summary should count held apps while delegating repair to Scoop.'
@@ -151,13 +159,13 @@ try {
 
     $success = Invoke-Scenario -FailApp ''
     Assert-Equal 0 $success.ExitCode 'All successful app commands should produce exit code 0.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update broken', 'update healthy', 'update damaged') $success.Calls 'Eligible apps should be updated exactly once.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update broken', 'update healthy', 'update damaged') $success.Calls 'Eligible apps should be updated exactly once.'
     Assert-Contains $success.Output 'Completed: 3' 'The successful summary should include all eligible apps.'
     Assert-Contains $success.Output 'Failed: 0' 'The successful summary should contain no failures.'
 
     $syncFailure = Invoke-Scenario -FailApp '' -SyncFailure $true
     Assert-Equal 1 $syncFailure.ExitCode 'A synchronization failure should produce aggregate exit code 1.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update broken', 'update healthy', 'update damaged') $syncFailure.Calls 'A synchronization failure must not prevent app updates.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update broken', 'update healthy', 'update damaged') $syncFailure.Calls 'A synchronization failure must not prevent app updates.'
     Assert-Contains $syncFailure.Output 'Completed: 3' 'Apps should still complete after synchronization fails.'
     Assert-Contains $syncFailure.Output 'Failed: 1' 'The synchronization failure should appear in the summary.'
 
@@ -183,40 +191,40 @@ try {
 
     $elevationDisabled = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one,global-two' -IsAdministrator false -NoElevationPrompt -CommandOptions @('-ag')
     Assert-Equal 0 $elevationDisabled.ExitCode 'Skipped global apps should not make a non-elevated run fail.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update healthy') $elevationDisabled.Calls 'Disabled elevation should leave global apps untouched.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy') $elevationDisabled.Calls 'Disabled elevation should leave global apps untouched.'
     Assert-Contains $elevationDisabled.Output 'Skipped: 2' 'Both global apps should be summarized as skipped.'
     Assert-Contains $elevationDisabled.Output 'elevation prompt was disabled' 'The summary should explain why global apps were skipped.'
 
     $elevationDeclined = Invoke-Scenario -FailApp '' -Apps 'global-one,global-two' -IsAdministrator false -ElevationResponse 'n' -CommandOptions @('-ag')
     Assert-Equal 0 $elevationDeclined.ExitCode 'Declining elevation should be a successful partial run.'
-    Assert-Sequence @('config last_update', 'update', 'export') $elevationDeclined.Calls 'Declining elevation should not invoke global updates.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop') $elevationDeclined.Calls 'Declining elevation should not invoke global updates.'
     Assert-Contains $elevationDeclined.Output 'Administrator retry was declined.' 'The summary should record a declined elevation prompt.'
 
     $elevationCanceled = Invoke-Scenario -FailApp '' -Apps 'global-one,global-two' -IsAdministrator false -ElevationResponse 'y' -ElevationState Canceled -CommandOptions @('-ag')
     Assert-Equal 0 $elevationCanceled.ExitCode 'Canceling UAC should leave global apps skipped rather than failed.'
-    Assert-Sequence @('config last_update', 'update', 'export') $elevationCanceled.Calls 'Canceling UAC should not invoke global updates.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop') $elevationCanceled.Calls 'Canceling UAC should not invoke global updates.'
     Assert-Contains $elevationCanceled.Output 'global-one (global) [ElevationCanceled]' 'Canceled UAC should have a distinct category.'
 
     $elevationFailed = Invoke-Scenario -FailApp '' -Apps 'global-one,global-two' -IsAdministrator false -ElevationResponse 'y' -ElevationState Failed -CommandOptions @('-ag')
     Assert-Equal 1 $elevationFailed.ExitCode 'An unavailable elevated worker should make the accepted retry fail clearly.'
-    Assert-Sequence @('config last_update', 'update', 'export') $elevationFailed.Calls 'An elevation launch failure should not invoke global updates.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop') $elevationFailed.Calls 'An elevation launch failure should not invoke global updates.'
     Assert-Contains $elevationFailed.Output 'global-one (global) [ElevationFailed]' 'Elevation launch failures should have a distinct category.'
 
     $elevatedSuccess = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one,global-two' -IsAdministrator false -ElevationResponse 'y' -ElevationBypass $true -CommandOptions @('-ag')
     Assert-Equal 0 $elevatedSuccess.ExitCode 'A successful elevated batch should produce exit code 0.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update healthy', 'update global-one --global', 'update global-two --global') $elevatedSuccess.Calls 'One worker should update all deferred global apps in order.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy', 'update global-one --global', 'update global-two --global') $elevatedSuccess.Calls 'One worker should update all deferred global apps in order.'
     Assert-Contains $elevatedSuccess.Output 'Completed: 3' 'Elevated successes should merge into the parent summary.'
     Assert-Contains $elevatedSuccess.Output 'global-one (global) [Success]' 'Elevated results should retain global labels.'
 
     $elevatedPartialFailure = Invoke-Scenario -FailApp 'global-one' -Apps 'global-one,global-two' -IsAdministrator false -ElevationResponse 'y' -ElevationBypass $true -CommandOptions @('-ag')
     Assert-Equal 1 $elevatedPartialFailure.ExitCode 'An elevated app failure should affect the aggregate exit code.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update global-one --global', 'update global-two --global') $elevatedPartialFailure.Calls 'An elevated app failure must not prevent later global updates.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update global-one --global', 'update global-two --global') $elevatedPartialFailure.Calls 'An elevated app failure must not prevent later global updates.'
     Assert-Contains $elevatedPartialFailure.Output 'global-one (global) [Download] (exit 23)' 'Elevated failures should preserve their classification.'
     Assert-Contains $elevatedPartialFailure.Output 'global-two (global) [Success]' 'Later elevated apps should still complete.'
 
     $alreadyElevated = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one,global-two' -IsAdministrator true -CommandOptions @('-ag')
     Assert-Equal 0 $alreadyElevated.ExitCode 'An already-elevated run should update all apps directly.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update healthy', 'update global-one --global', 'update global-two --global') $alreadyElevated.Calls 'An elevated parent should not defer global apps to another worker.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy', 'update global-one --global', 'update global-two --global') $alreadyElevated.Calls 'An elevated parent should not defer global apps to another worker.'
     Assert-Contains $alreadyElevated.Output 'Completed: 3' 'Direct global successes should be included in the summary.'
 
     $syncOnly = Invoke-Scenario -FailApp '' -CommandOptions @()
@@ -225,18 +233,18 @@ try {
 
     $selected = Invoke-Scenario -FailApp 'broken' -CommandOptions @('broken', 'healthy', 'broken', '-fiqks')
     Assert-Equal 1 $selected.ExitCode 'Selected app failures should aggregate.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update broken --force --independent --quiet --no-cache --skip-hash-check', 'update healthy --force --independent --quiet --no-cache --skip-hash-check') $selected.Calls 'Explicit selection, deduplication and forwarding must preserve scope.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update broken --force --independent --quiet --no-cache --skip-hash-check', 'update healthy --force --independent --quiet --no-cache --skip-hash-check') $selected.Calls 'Explicit selection, deduplication and forwarding must preserve scope.'
 
     $localOnly = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one' -IsAdministrator true
-    Assert-Sequence @('config last_update', 'update', 'export', 'update healthy') $localOnly.Calls 'All without -g must select only local apps, even as administrator.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy') $localOnly.Calls 'All without -g must select only local apps, even as administrator.'
 
     $globalOnly = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one' -IsAdministrator true -CommandOptions @('-g', 'global-one', '-f')
-    Assert-Sequence @('config last_update', 'update', 'export', 'update global-one --force --global') $globalOnly.Calls 'Explicit -g must select only that global app.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update global-one --force --global') $globalOnly.Calls 'Explicit -g must select only that global app.'
 
     $env:SCOOP_RESILIENT_TEST_FRESH = 'true'
     try {
         $fresh = Invoke-Scenario -FailApp '' -CommandOptions @('healthy')
-        Assert-Sequence @('config last_update', 'export', 'update healthy') $fresh.Calls 'A fresh Scoop installation must not be synchronized unconditionally.'
+        Assert-Sequence @('config last_update', 'export', 'prefix scoop', 'update healthy') $fresh.Calls 'A fresh Scoop installation must not be synchronized unconditionally.'
     } finally { Remove-Item Env:SCOOP_RESILIENT_TEST_FRESH -ErrorAction SilentlyContinue }
 
     $zeroErrors = Invoke-Scenario -FailApp '' -Apps 'missing-current,stderr-success,healthy'
@@ -249,9 +257,9 @@ try {
     Assert-Sequence @('update') $scoopOnly.Calls 'Explicit scoop should synchronize without exporting apps.'
 
     $wildcard = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one' -CommandOptions @('*')
-    Assert-Sequence @('config last_update', 'update', 'export', 'update healthy') $wildcard.Calls 'Wildcard must match --all local selection.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy') $wildcard.Calls 'Wildcard must match --all local selection.'
     $qualified = Invoke-Scenario -FailApp '' -CommandOptions @('main/healthy@1.0', 'healthy')
-    Assert-Sequence @('config last_update', 'update', 'export', 'update healthy') $qualified.Calls 'Qualified names should be normalized and deduplicated as in update.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy') $qualified.Calls 'Qualified names should be normalized and deduplicated as in update.'
     $missingTarget = Invoke-Scenario -FailApp '' -Apps 'healthy' -CommandOptions @('absent', 'healthy')
     Assert-Equal 1 $missingTarget.ExitCode 'Missing explicit apps should produce a failure exit code.'
     Assert-Contains $missingTarget.Output 'healthy [Success]' 'A missing target must not block installed targets.'
@@ -260,11 +268,52 @@ try {
     Assert-Contains $fatal.Output 'healthy [Success]' 'Fatal diagnostics must not block later apps.'
     $jsonName = Invoke-Scenario -FailApp '' -Apps 'healthy,healthy.json' -CommandOptions @('healthy.json', 'https://example.invalid/healthy.json')
     Assert-Equal 1 $jsonName.ExitCode 'A URL is not an installed-app selector.'
-    Assert-Sequence @('config last_update', 'update', 'export', 'update healthy.json') $jsonName.Calls 'Installed names ending in .json must not select a different app.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy.json') $jsonName.Calls 'Installed names ending in .json must not select a different app.'
+
+    Remove-Item -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG -ErrorAction SilentlyContinue
+    $manyCurrent = (1..200 | ForEach-Object { "current-$_" }) -join ','
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $idle = Invoke-Scenario -FailApp '' -Apps $manyCurrent
+    $timer.Stop()
+    Assert-Equal 0 $idle.ExitCode 'An entirely current selection should succeed.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop') $idle.Calls 'Current apps must launch no individual updates.'
+    Assert-Sequence @('preflight upgrade') @(Get-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG) 'The whole selection must use one preflight process.'
+    Assert-Contains $idle.Output 'Current: 200' 'Filtered apps must still appear in summary counts.'
+    Write-Host "200 current apps: one preflight, zero update workers, $($timer.ElapsedMilliseconds) ms."
+
+    $mixed = Invoke-Scenario -FailApp 'broken' -Apps 'current-one,broken,healthy,current-two'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update broken', 'update healthy') $mixed.Calls 'Only outdated apps should launch workers and a failure must not block later jobs.'
+    Assert-Contains $mixed.Output 'Current: 2' 'Mixed current apps should remain in the summary.'
+
+    $forced = Invoke-Scenario -FailApp '' -Apps 'current-one,held' -CommandOptions @('-af')
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update current-one --force') $forced.Calls 'Force must include current apps but preserve holds.'
+
+    $env:SCOOP_RESILIENT_TEST_STATUS_ERROR = 'current-one'
+    try {
+        $unknown = Invoke-Scenario -FailApp '' -Apps 'current-one,healthy'
+        Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update current-one', 'update healthy') $unknown.Calls 'Inconclusive status must be diagnosed by a worker.'
+    } finally { $env:SCOOP_RESILIENT_TEST_STATUS_ERROR = '' }
+
+    $globalCurrent = Invoke-Scenario -FailApp '' -Apps 'global-current-one' -IsAdministrator false -ElevationResponse 'y' -ElevationState Failed -CommandOptions @('-ag')
+    Assert-Equal 0 $globalCurrent.ExitCode 'Current global apps must not require elevation.'
+    Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop') $globalCurrent.Calls 'Current globals must launch no worker.'
+
+    $corePath = Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib/core.ps1'
+    $coreText = Get-Content -LiteralPath $corePath -Raw
+    try {
+        Set-Content -LiteralPath $corePath -Value "throw 'Injected planner failure'"
+        $fallback = Invoke-Scenario -FailApp '' -Apps 'current,healthy'
+        Assert-Equal 0 $fallback.ExitCode 'A failed planner must fall back to isolated app workers.'
+        Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update current', 'update healthy') $fallback.Calls 'Planner failure must not hide selected apps.'
+        Assert-Contains $fallback.Output 'Preflight unavailable' 'Planner fallback should explain its reason.'
+    } finally { Set-Content -LiteralPath $corePath -Value $coreText }
 
     Write-Host 'All scoop-upgrade integration tests passed.' -ForegroundColor Green
 } finally {
     $environment = @{
+        SCOOP_RESILIENT_TEST_CORE = $previousCore
+        SCOOP_RESILIENT_TEST_WORKER_LOG = $previousWorkerLog
+        SCOOP_RESILIENT_TEST_STATUS_ERROR = $previousStatusError
         SCOOP_UPGRADE_SCOOP_COMMAND = $previousCommand
         SCOOP_RESILIENT_SCOOP_COMMAND = $previousToolsCommand
         SCOOP_RESILIENT_TEST_NATIVE_SCOOP = $previousNativeScoop

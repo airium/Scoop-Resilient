@@ -139,8 +139,40 @@ function Invoke-AppOperation {
     return Invoke-TidyProcess -Name $Name -Global:$Global
 }
 
+function Set-TidyJobPlan {
+    param([object[]] $Jobs)
+    $script:TidyJobs = @{}
+    foreach ($job in @($Jobs)) { $script:TidyJobs["$([bool]$job.Global)/$($job.Name)"] = $job }
+}
+
+function Invoke-PreflightProcess {
+    param([object[]] $Targets)
+    $directory = Join-Path ([IO.Path]::GetTempPath()) "scoop-plan-$PID-$([Guid]::NewGuid().ToString('N'))"
+    try {
+        New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
+        $requestPath = Join-Path $directory 'request.json'
+        $resultPath = Join-Path $directory 'result.json'
+        Write-JsonFile -Path $requestPath -Value @{
+            Operation = $script:Operation; CoreDirectory = $script:CoreDirectory
+            Targets = @($Targets); Options = @($script:ForwardOptions)
+        }
+        $hostExecutable = Get-CurrentPowerShellExecutable
+        $ErrorActionPreference = 'Continue'
+        $PSNativeCommandUseErrorActionPreference = $false
+        & $hostExecutable -NoProfile -ExecutionPolicy Bypass -File $script:EntryPoint --internal-plan-worker $requestPath $resultPath 2>&1 | Out-Host
+        $code = $LASTEXITCODE
+        if (!(Test-Path -LiteralPath $resultPath)) { throw "Preflight exited with code $code without results." }
+        $response = Get-Content -LiteralPath $resultPath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
+        if (!$response.Success) { throw [string]$response.Error }
+        return $response
+    } catch {
+        Write-Warning "Preflight unavailable; using isolated workers for the selection: $($_.Exception.Message)"
+        return $null
+    } finally { Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
 function Invoke-TidyProcess {
-    param([string] $Name, [bool] $Global, [switch] $PartialDownloads)
+    param([string] $Name, [bool] $Global, [switch] $PartialDownloads, [string[]] $PartialNames)
     $directory = Join-Path ([IO.Path]::GetTempPath()) "scoop-tidy-$PID-$([Guid]::NewGuid().ToString('N'))"
     $resultPath = Join-Path $directory 'result.json'
     try {
@@ -148,12 +180,25 @@ function Invoke-TidyProcess {
         $request = @{
             Name = $Name; Global = $Global; CoreDirectory = $script:CoreDirectory
             Cache = ('--cache' -in $script:ForwardOptions); PartialDownloads = [bool]$PartialDownloads
-        } | ConvertTo-Json -Compress
-        $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($request))
+            CachePlanned = $false; CacheNames = @(); PartialPlanned = $false; PartialNames = @()
+            VersionsPlanned = $false; VersionNames = @()
+        }
+        if ($script:TidyJobs.ContainsKey("$Global/$Name")) {
+            $job = $script:TidyJobs["$Global/$Name"]
+            $request.CachePlanned = [bool]$job.CachePlanned
+            $request.CacheNames = @($job.CacheNames)
+            $request.VersionsPlanned = [bool]$job.VersionsPlanned
+            $request.VersionNames = @($job.VersionNames)
+        }
+        if ($PartialDownloads -and $PSBoundParameters.ContainsKey('PartialNames')) {
+            $request.PartialPlanned = $true; $request.PartialNames = @($PartialNames)
+        }
+        $requestPath = Join-Path $directory 'request.json'
+        Write-JsonFile -Path $requestPath -Value $request
         $hostExecutable = Get-CurrentPowerShellExecutable
         $ErrorActionPreference = 'Continue'
         $PSNativeCommandUseErrorActionPreference = $false
-        & $hostExecutable -NoProfile -ExecutionPolicy Bypass -File $script:EntryPoint --internal-tidy-worker $payload $resultPath 2>&1 | Out-Host
+        & $hostExecutable -NoProfile -ExecutionPolicy Bypass -File $script:EntryPoint --internal-tidy-worker $requestPath $resultPath 2>&1 | Out-Host
         $code = $LASTEXITCODE
         if (!(Test-Path -LiteralPath $resultPath -PathType Leaf)) { throw "Cleanup worker exited with code $code without returning results." }
         $response = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json -ErrorAction Stop
@@ -198,6 +243,7 @@ function Invoke-MaintenanceCommand {
     param([string] $Operation, [AllowEmptyCollection()][string[]] $CommandArguments)
     $script:Operation = $Operation
     $script:CoreDirectory = ''
+    Set-TidyJobPlan -Jobs @()
     try { $script:Options = Read-CommandOptions -Operation $Operation -Arguments $CommandArguments }
     catch { Write-Error $_.Exception.Message; Show-CommandUsage $Operation; return 1 }
     if ($script:Options.Help) { Show-CommandUsage $Operation; return 0 }
@@ -234,6 +280,18 @@ function Invoke-MaintenanceCommand {
         [void]$results.Add((New-Outcome -Name 'Installed app discovery' -Status Failed -Category Discovery -Reason $_.Exception.Message -ExitCode 2))
         Write-Summary -Results $results; return 2
     }
+    $plan = $null
+    if ($Operation -eq 'upgrade') {
+        try { $script:CoreDirectory = Get-ScoopCoreDirectory }
+        catch { Write-Warning "Preflight unavailable; checking selected apps individually: $($_.Exception.Message)" }
+    }
+    if ($script:CoreDirectory) { $plan = Invoke-PreflightProcess -Targets $targets }
+    if ($null -ne $plan) {
+        foreach ($outcome in @($plan.Results)) { [void]$results.Add($outcome) }
+        if ($Operation -eq 'tidy') { Set-TidyJobPlan -Jobs @($plan.Jobs) }
+        $targets = @($plan.Jobs)
+        Write-Host ("Planned {0} of {1} apps for {2}." -f $targets.Count, $plan.Statistics.Targets, $Operation) -ForegroundColor Cyan
+    }
     $isAdministrator = Test-IsAdministrator
     $globalNames = [System.Collections.Generic.List[string]]::new()
     foreach ($app in $targets) {
@@ -246,7 +304,11 @@ function Invoke-MaintenanceCommand {
     }
     Complete-GlobalBatch -Names $globalNames.ToArray() -Results $results
     if ($Operation -eq 'tidy' -and '--cache' -in $script:ForwardOptions) {
-        foreach ($outcome in @(Invoke-TidyProcess -Name 'Partial downloads' -PartialDownloads)) { [void]$results.Add($outcome) }
+        if ($null -eq $plan) {
+            foreach ($outcome in @(Invoke-TidyProcess -Name 'Partial downloads' -PartialDownloads)) { [void]$results.Add($outcome) }
+        } elseif (@($plan.PartialNames).Count) {
+            foreach ($outcome in @(Invoke-TidyProcess -Name 'Partial downloads' -PartialDownloads -PartialNames @($plan.PartialNames))) { [void]$results.Add($outcome) }
+        }
     }
     Write-Summary -Results $results
     return [int](@($results | Where-Object { $_.Status -eq 'Failed' }).Count -gt 0)
