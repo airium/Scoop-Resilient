@@ -1,0 +1,39 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-powershell:
+    name: Windows PowerShell 5.1
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Checkout Scoop 0.6.0 for integration tests
+        uses: actions/checkout@v4
+        with:
+          repository: ScoopInstaller/Scoop
+          ref: v0.6.0
+          path: test/upstream-scoop
+      - name: Run integration tests
+        shell: powershell
+        run: ./test/run.ps1
+
+  powershell:
+    name: PowerShell 7
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Checkout Scoop 0.6.0 for integration tests
+        uses: actions/checkout@v4
+        with:
+          repository: ScoopInstaller/Scoop
+          ref: v0.6.0
+          path: test/upstream-scoop
+      - name: Run integration tests
+        shell: pwsh
+        run: ./test/run.ps1
