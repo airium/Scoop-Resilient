@@ -255,16 +255,25 @@ try {
             New-Item -ItemType Directory -Path (Join-Path $env:SCOOP 'shims'), (Join-Path $env:SCOOP_GLOBAL 'apps') -Force | Out-Null
             New-TestFile -Path (Join-Path $env:XDG_CONFIG_HOME 'scoop/config.json') -Contents (@{last_update=[DateTime]::Now.ToString('o');aria2_enabled=$false} | ConvertTo-Json)
             $main = Join-Path $env:SCOOP 'buckets/main'
+            $bucket = Join-Path $main 'bucket'
             foreach ($name in @('broken', 'healthy')) {
                 $manifest = @{version='2.0';url="https://example.invalid/$name.zip";hash=('0' * 64)} | ConvertTo-Json
-                New-TestFile -Path (Join-Path $main "$name.json") -Contents $manifest
+                New-TestFile -Path (Join-Path $bucket "$name.json") -Contents $manifest
                 foreach ($version in @('1.0', '2.0')) {
                     $metadata = Join-Path $env:SCOOP "apps/$name/$version/scoop-install.json"
                     if (Test-Path $metadata) { New-TestFile -Path $metadata -Contents '{"architecture":"64bit","bucket":"main"}' }
                 }
             }
             & git -C $main init --quiet
+            Assert-Tidy ($LASTEXITCODE -eq 0) 'Could not initialize the fixture bucket.'
             & git -C $main remote add origin https://github.com/ScoopInstaller/Main
+            Assert-Tidy ($LASTEXITCODE -eq 0) 'Could not configure the fixture bucket remote.'
+            & git -C $main add -- bucket
+            Assert-Tidy ($LASTEXITCODE -eq 0) 'Could not stage the fixture bucket manifests.'
+            # export reads the bucket's last commit date. An unborn repository
+            # makes git log print a fatal error, corrupting the exported JSON.
+            & git -C $main -c user.name='Scoop-Resilient tests' -c user.email='scoop-resilient@example.invalid' -c commit.gpgsign=false commit --quiet -m 'test: initialize fixture bucket'
+            Assert-Tidy ($LASTEXITCODE -eq 0) 'Could not create the fixture bucket commit.'
             # Scoop 0.6.0 recognizes legacy cache names, so this bad cached file
             # triggers its real hash-abort path without any download.
             New-TestFile -Path (Join-Path $env:SCOOP_CACHE 'broken#2.0#https_example.invalid_broken.zip') -Contents 'injected hash mismatch'
