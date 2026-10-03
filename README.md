@@ -67,9 +67,14 @@ Compared with the previous implementation, **no arguments no longer update every
 app**. Use `scoop upgrade -a` for that workflow. Global apps now require `-g`.
 
 Hash verification is enabled unless `-s` is explicitly supplied. Scoop sometimes
-returns zero despite printing an error; known manifest, architecture, and explicit
-error diagnostics are reported as failures. Running apps are reported as skipped,
-and already-current apps are reported as current. Classification of arbitrary
+returns zero despite printing an error. Explicit errors, including those joined
+to hook progress on the same line, are classified as failures using the same
+categories as nonzero exits. Missing administrator rights are reported as
+`Elevation`; permission, hash, download, manifest, architecture, extraction,
+installer and file-in-use diagnostics retain their categories. Failure evidence
+takes precedence over later current/running messages, while harmless warnings
+and successful downloader fallbacks do not become failures. Running apps are
+reported as skipped, and already-current apps are reported as current. Classification of arbitrary
 installer output is best effort; original diagnostics remain visible.
 
 ## Tidy
@@ -193,13 +198,13 @@ Remove the development shims with `scoop shim rm scoop-upgrade` and
 Generate the bundle and matching manifest:
 
 ```powershell
-./scripts/new-manifest.ps1 -Version 0.2.0 -License MIT
+./scripts/new-manifest.ps1 -Version 0.2.1 -License MIT
 ```
 
-This creates `dist/scoop-resilient-0.2.0.zip` and `bucket/scoop-resilient.json`. The archive
+This creates `dist/scoop-resilient-0.2.1.zip` and `bucket/scoop-resilient.json`. The archive
 contains both entry scripts, shared libraries, and this README. The manifest
 hashes that exact archive and references the corresponding GitHub release asset.
-Upload that same archive as `scoop-resilient-0.2.0.zip` to the `v0.2.0` release after
+Upload that same archive as `scoop-resilient-0.2.1.zip` to the `v0.2.1` release after
 committing the source/manifest and pushing the tag. Regenerating an archive can
 change its hash; regenerate the manifest too, or pass `-ArchivePath` to hash an
 already-built archive. `dist` is ignored by Git.

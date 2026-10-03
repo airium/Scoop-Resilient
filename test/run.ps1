@@ -189,6 +189,13 @@ try {
     Assert-Contains $classified.Output 'Failed: 7' 'The summary should count all classified failures.'
     Assert-Contains $classified.Output 'Skipped: 1' 'The running package should be counted as skipped.'
 
+    $inlineHook = Invoke-Scenario -FailApp '' -Apps 'clash-verge-rev,copyq,healthy'
+    Assert-Equal 1 $inlineHook.ExitCode 'A zero-exit embedded hook error must make the aggregate fail.'
+    Assert-Contains $inlineHook.Output 'clash-verge-rev [Elevation]' 'Missing administrator privileges should be an elevation failure.'
+    Assert-Contains $inlineHook.Output 'copyq [Running]' 'A running app should remain skipped.'
+    Assert-Contains $inlineHook.Output 'healthy [Success]' 'A hook failure must not stop later app workers.'
+    Assert-Contains $inlineHook.Output 'Failed: 1' 'The failed hook must be counted accurately.'
+
     $elevationDisabled = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one,global-two' -IsAdministrator false -NoElevationPrompt -CommandOptions @('-ag')
     Assert-Equal 0 $elevationDisabled.ExitCode 'Skipped global apps should not make a non-elevated run fail.'
     Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy') $elevationDisabled.Calls 'Disabled elevation should leave global apps untouched.'
@@ -338,5 +345,6 @@ try {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+& "$PSScriptRoot/classification.ps1"
 & "$PSScriptRoot/tidy.ps1"
 & "$PSScriptRoot/package.ps1"

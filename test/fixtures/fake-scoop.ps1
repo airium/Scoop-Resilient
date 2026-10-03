@@ -69,6 +69,8 @@ switch ($CommandArguments[0]) {
             exit 23
         }
         switch ($app) {
+            'clash-verge-rev' { Write-Output 'Checking hash... OK.'; Write-Output 'Running pre_uninstall script... ERROR clash-verge-rev requires admin rights to update'; exit 0 }
+            'copyq' { Write-Output 'ERROR The following instances of "copyq" are still running. Close them and try again.'; Write-Output 'Running process detected, skip updating.'; exit 0 }
             'stderr-success' { [Console]::Error.WriteLine('Harmless native diagnostic'); Write-Output 'Finished after stderr.'; exit 0 }
             'missing-current' { Write-Output "ERROR No manifest available for 'missing-current'."; Write-Output 'missing-current: 1.0 (latest version)'; exit 0 }
             'fatal-current' { Write-Output 'fatal: injected repository error'; Write-Output 'fatal-current: 1.0 (latest version)'; exit 0 }

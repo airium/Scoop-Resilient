@@ -201,94 +201,78 @@ function ConvertTo-AppOutcome {
         [PSCustomObject] $CommandResult
     )
 
-    $text = @(Get-CleanOutputLines -Output $CommandResult.Output) -join [Environment]::NewLine
+    $lines = @(Get-CleanOutputLines -Output $CommandResult.Output)
+    $text = $lines -join [Environment]::NewLine
+    $runningPattern = '(?i)Running process detected|still running\. Close them and try again'
     $definitions = @(
-        @{
-            Category = 'Running'; Pattern = '(?i)Running process detected|still running\. Close them and try again'
-            Reason = 'The application is running. Close it and retry.'
-        },
-        @{
-            Category = 'Elevation'; Pattern = '(?i)need admin rights|administrator rights|requested operation requires elevation|elevation required'
-            Reason = 'Administrator rights are required.'
-        },
-        @{
-            Category = 'Permission'; Pattern = '(?i)access (?:is )?denied|UnauthorizedAccessException|permission denied'
-            Reason = 'Access was denied.'
-        },
-        @{
-            Category = 'Hash'; Pattern = '(?i)hash check failed|hash.*(?:does not match|mismatch)|expected.*hash'
-            Reason = 'The downloaded file failed hash validation.'
-        },
-        @{
-            Category = 'Download'; Pattern = '(?i)URL .+ is not valid|Download failed|remote server returned an error|response status code does not indicate success|\b(?:403|404)\b|timed out|unable to connect|name resolution'
-            Reason = 'The package could not be downloaded.'
-        },
-        @{
-            Category = 'Manifest'; Pattern = '(?i)No manifest available|Error parsing JSON|Error in manifest|manifest.*(?:missing|invalid|unsupported)'
-            Reason = 'The package manifest is unavailable or invalid.'
-        },
-        @{
-            Category = 'InUse'; Pattern = '(?i)Folder in use|may be in use|being used by another process|file.*in use|sharing violation'
-            Reason = 'A required file or directory is in use.'
-        },
-        @{
-            Category = 'Extraction'; Pattern = '(?i)Failed to extract|decompress|7-Zip.*(?:error|failed)|Unzip failed'
-            Reason = 'The downloaded package could not be extracted.'
-        },
-        @{
-            Category = 'Installer'; Pattern = '(?i)Installation aborted|Uninstallation aborted|Exit code was'
-            Reason = 'The package installer or uninstaller failed.'
-        }
+        @{ Category = 'Elevation'; Pattern = '(?i)(?:needs?|requires?|requiring)\s+admin(?:istrator)?\s+(?:rights|permissions?|privileges)|(?:admin(?:istrator)?\s+(?:rights|permissions?|privileges))\s+(?:are\s+)?required|requested operation requires elevation|elevation required'; Reason = 'Administrator rights are required.' },
+        @{ Category = 'Permission'; Pattern = '(?i)access (?:is )?denied|UnauthorizedAccessException|permission denied'; Reason = 'Access was denied.' },
+        @{ Category = 'Hash'; Pattern = '(?i)hash check failed|hash.*(?:does not match|mismatch)|checksum.*(?:does not match|mismatch|failed)'; Reason = 'The downloaded file failed hash validation.' },
+        @{ Category = 'Manifest'; Pattern = '(?i)No manifest available|Couldn.t find manifest|Error parsing JSON|Error in manifest|manifest.*(?:missing|invalid|unsupported)|Manifest doesn.t specify a version'; Reason = 'The package manifest is unavailable or invalid.' },
+        @{ Category = 'Architecture'; Pattern = "(?i)doesn't support current architecture|unsupported architecture"; Reason = 'The package does not support the current architecture.' },
+        @{ Category = 'InUse'; Pattern = '(?i)Folder in use|may be in use|being used by another process|file.*in use|sharing violation'; Reason = 'A required file or directory is in use.' },
+        @{ Category = 'Extraction'; Pattern = '(?i)Failed to (?:extract|list files)|decompress(?:ion)?\s+(?:error|failed)|7-Zip.*(?:error|failed)|Unzip failed|Cannot find external 7-Zip'; Reason = 'The downloaded package could not be extracted.' },
+        @{ Category = 'Installer'; Pattern = '(?i)Installation aborted|Uninstallation aborted|installer.*(?:failed|failure)|uninstaller.*(?:failed|failure)|Exit code was\s+(?!0\b)-?\d+'; Reason = 'The package installer or uninstaller failed.' },
+        @{ Category = 'Download'; Pattern = '(?i)URL .+ is not valid|Download failed|remote server returned an error|response status code does not indicate success|timed out|unable to connect|name resolution|(?:HTTP|status(?: code)?|error)\D{0,12}(?:403|404)\b'; Reason = 'The package could not be downloaded.' }
     )
-
-    if ($CommandResult.ExitCode -eq 0 -and $text -match '(?im)^ERROR\s|^fatal:|^error:|^Couldn.t find manifest|^Update failed\.') {
-        # Preserve explicit errors even when Scoop subsequently prints 'latest version'.
-        $diagnostic = Get-DiagnosticReason -Output $CommandResult.Output -Pattern '(?im)^ERROR\s|^fatal:|^error:|^Couldn.t find manifest|^Update failed\.' -Fallback 'Scoop reported an error.'
-        if ($text -notmatch '(?i)still running\. Close them and try again') {
-            $category = if ($text -match '(?i)manifest') { 'Manifest' } elseif ($text -match "(?i)doesn't support current architecture") { 'Architecture' } else { 'Unknown' }
-            return New-Outcome -Name $Name -Global:$Global -Status Failed -Category $category -Reason $diagnostic -Details $CommandResult.Output
+    $diagnostics = [System.Collections.Generic.List[string]]::new()
+    $explicit = [System.Collections.Generic.List[string]]::new()
+    $running = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in $lines) {
+        # Warnings can describe recoverable download failures or harmless installer
+        # side effects. They are not failure evidence for a zero-exit command.
+        if ($line -match '(?i)^\s*(?:WARN(?:ING)?|INFO|DEBUG)\b') { continue }
+        if ($line -match $runningPattern) { [void]$running.Add($line); continue }
+        # Write-Host -NoNewline can join hook progress and Scoop's ERROR message.
+        # Detect the severity token anywhere in that line and keep the actual error.
+        $marker = [regex]::Match($line, '(?i)^\s*(?<error>ERROR\b:?\s*|FATAL:\s*)')
+        if (!$marker.Success) {
+            # Embedded severity needs an uppercase token or an explicit colon;
+            # ordinary prose such as 'completed without an error' is not a failure.
+            $marker = [regex]::Match($line, '\s(?<error>ERROR\b:?\s*|FATAL:\s*|(?i:error|fatal):\s*)')
+        }
+        if ($marker.Success) {
+            $diagnostic = $line.Substring($marker.Groups['error'].Index)
+            [void]$explicit.Add($diagnostic)
+            [void]$diagnostics.Add($diagnostic)
+        } elseif ($line -match '(?i)^Couldn.t find manifest|^Update failed\.') {
+            [void]$explicit.Add($line)
+            [void]$diagnostics.Add($line)
+        } else {
+            foreach ($definition in $definitions) {
+                if ($line -match $definition.Pattern) { [void]$diagnostics.Add($line); break }
+            }
         }
     }
-    if ($CommandResult.ExitCode -eq 0) {
-        if ($text -match '(?i)Running process detected|still running\. Close them and try again') {
-            $reason = Get-DiagnosticReason -Output $CommandResult.Output -Pattern '(?i)Running process detected|still running\. Close them and try again' -Fallback 'The application is running. Close it and retry.'
-            return New-Outcome -Name $Name -Global:$Global -Status Skipped -Category Running -Reason $reason -Details $CommandResult.Output
+    $failed = $CommandResult.ExitCode -ne 0 -or $explicit.Count -gt 0 -or $diagnostics.Count -gt 0
+    if ($failed) {
+        # A real failure must take precedence over 'current' or 'running' text
+        # elsewhere in the same command output. Prefer explicit errors over prose.
+        [string[]]$evidence = if ($explicit.Count) { $explicit.ToArray() } else { $diagnostics.ToArray() }
+        if ($null -eq $evidence -or !$evidence.Length) { $evidence = [string[]]$lines }
+        $classification = $null
+        foreach ($definition in $definitions) {
+            if (@($evidence | Where-Object { $_ -match $definition.Pattern }).Count) { $classification = $definition; break }
         }
-        if ($text -match "(?im)(?:latest version of '.+' \(.+\) is already installed|^[A-Za-z0-9_.-]+:\s+.+\s+\(latest version\)\s*$)") {
-            $reason = Get-DiagnosticReason -Output $CommandResult.Output -Pattern "(?i)latest version.*already installed|^[A-Za-z0-9_.-]+:\s+.+\s+\(latest version\)\s*$" -Fallback 'The latest version is already installed.'
-            return New-Outcome -Name $Name -Global:$Global -Status Current -Category Current -Reason $reason -Details $CommandResult.Output
+        if ($classification) {
+            $category = $classification.Category; $fallback = $classification.Reason; $pattern = $classification.Pattern
+        } elseif ($running.Count -and !$explicit.Count -and !$diagnostics.Count) {
+            $category = 'Running'; $fallback = 'The application is running.'; $pattern = $runningPattern
+        } else {
+            $category = 'Unknown'; $fallback = "Scoop exited with code $($CommandResult.ExitCode) or reported an error."; $pattern = '(?i)error|fatal|failed|exception|aborted|denied|invalid'
         }
-        if ($text -match '(?i)No manifest available') {
-            $reason = Get-DiagnosticReason -Output $CommandResult.Output -Pattern '(?i)No manifest available' -Fallback 'The package manifest is unavailable.'
-            return New-Outcome -Name $Name -Global:$Global -Status Failed -Category Manifest -Reason $reason -Details $CommandResult.Output
-        }
-        if ($text -match "(?i)doesn't support current architecture") {
-            $reason = Get-DiagnosticReason -Output $CommandResult.Output -Pattern "(?i)doesn't support current architecture" -Fallback 'The package does not support the current architecture.'
-            return New-Outcome -Name $Name -Global:$Global -Status Failed -Category Architecture -Reason $reason -Details $CommandResult.Output
-        }
-
-        return New-Outcome -Name $Name -Global:$Global -Status Completed -Category Success -Reason 'Scoop completed the update command.' -Details $CommandResult.Output
+        $reason = Get-DiagnosticReason -Output $evidence -Pattern $pattern -Fallback $fallback
+        return New-Outcome -Name $Name -Global:$Global -Status Failed -Category $category -Reason $reason -ExitCode $CommandResult.ExitCode -Details $CommandResult.Output
     }
-
-    $classification = $null
-    foreach ($definition in $definitions) {
-        if ($text -match $definition.Pattern) {
-            $classification = $definition
-            break
-        }
+    if ($running.Count) {
+        return New-Outcome -Name $Name -Global:$Global -Status Skipped -Category Running -Reason $running[0] -Details $CommandResult.Output
     }
-
-    if ($classification) {
-        $category = $classification.Category
-        $fallback = $classification.Reason
-        $pattern = $classification.Pattern
-    } else {
-        $category = 'Unknown'
-        $fallback = "Scoop exited with code $($CommandResult.ExitCode)."
-        $pattern = '(?i)error|failed|exception|aborted|denied|invalid'
+    $currentPattern = "(?im)(?:latest version of '.+' \(.+\) is already installed|^[A-Za-z0-9_.-]+:\s+.+\s+\(latest version\)\s*$)"
+    if ($text -match $currentPattern) {
+        $reason = Get-DiagnosticReason -Output $CommandResult.Output -Pattern $currentPattern -Fallback 'The latest version is already installed.'
+        return New-Outcome -Name $Name -Global:$Global -Status Current -Category Current -Reason $reason -Details $CommandResult.Output
     }
-    $reason = Get-DiagnosticReason -Output $CommandResult.Output -Pattern $pattern -Fallback $fallback
-    return New-Outcome -Name $Name -Global:$Global -Status Failed -Category $category -Reason $reason -ExitCode $CommandResult.ExitCode -Details $CommandResult.Output
+    return New-Outcome -Name $Name -Global:$Global -Status Completed -Category Success -Reason 'Scoop completed the update command.' -Details $CommandResult.Output
 }
 
 function Write-ResultSection {
