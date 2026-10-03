@@ -12,6 +12,22 @@ The [Scoop-Resilient repository](https://github.com/airium/Scoop-Resilient) prov
 the `scoop-resilient` package, which installs both command shims and their shared
 libraries.
 
+## Bucket installation
+
+Install both commands from the bucket:
+
+```powershell
+scoop bucket add scoop-resilient https://github.com/airium/Scoop-Resilient
+scoop install scoop-resilient/scoop-resilient
+```
+
+Then update apps and remove old versions/cache with:
+
+```powershell
+scoop upgrade -a
+scoop tidy -ak
+```
+
 ## Upgrade
 
 ```powershell
@@ -143,17 +159,7 @@ scoop tidy -ak
 Remove the development shims with `scoop shim rm scoop-upgrade` and
 `scoop shim rm scoop-tidy`.
 
-## Bucket installation and publishing
-
-After a release containing the bundle has been published:
-
-```powershell
-scoop bucket add scoop-resilient https://github.com/airium/Scoop-Resilient
-scoop install scoop-resilient/scoop-resilient
-```
-
-The package supplies both commands. A tagged release containing the bundle must
-be published before this installation route is usable.
+## Publishing
 
 Generate the bundle and matching manifest:
 
@@ -171,9 +177,9 @@ already-built archive. `dist` is ignored by Git.
 
 `origin` points to `git@github.com:airium/Scoop-Resilient.git`, so the generator
 derives `airium/Scoop-Resilient` automatically. Use `-Repository OWNER/Scoop-Resilient`
-to build for another repository. Choose the license you
-actually intend to grant and add its license text before publishing; `MIT` above
-is an example. No release or remote is created by these scripts.
+to build for another repository. The package is released under the MIT license;
+the archive includes [LICENSE](LICENSE). These scripts build local files; they
+do not create a GitHub release or push a tag.
 
 ## Testing
 
