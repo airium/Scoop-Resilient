@@ -21,5 +21,6 @@ try {
         $output = @(& (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $expanded $command) --help)
         if ($LASTEXITCODE -ne 0 -or ($output -join "`n") -notmatch 'Usage: scoop') { throw "Packaged $command cannot find its libraries." }
     }
+    & "$PSScriptRoot/shims.ps1" -InstallDirectory $expanded -ManifestPath $manifestPath
     Write-Host 'Release bundle tests passed.' -ForegroundColor Green
 } finally { Remove-Item -LiteralPath $temp -Recurse -Force }

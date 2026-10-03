@@ -152,6 +152,7 @@ Keep the entry scripts and `lib` directory together. From this checkout:
 ```powershell
 scoop shim add scoop-upgrade (Resolve-Path .\scoop-upgrade.ps1)
 scoop shim add scoop-tidy (Resolve-Path .\scoop-tidy.ps1)
+./lib/register-shims.ps1 -InstallDirectory (Get-Location).Path
 scoop upgrade -a
 scoop tidy -ak
 ```
@@ -164,13 +165,13 @@ Remove the development shims with `scoop shim rm scoop-upgrade` and
 Generate the bundle and matching manifest:
 
 ```powershell
-./scripts/new-manifest.ps1 -Version 0.1.0 -License MIT
+./scripts/new-manifest.ps1 -Version 0.1.1 -License MIT
 ```
 
-This creates `dist/scoop-resilient-0.1.0.zip` and `bucket/scoop-resilient.json`. The archive
+This creates `dist/scoop-resilient-0.1.1.zip` and `bucket/scoop-resilient.json`. The archive
 contains both entry scripts, shared libraries, and this README. The manifest
 hashes that exact archive and references the corresponding GitHub release asset.
-Upload that same archive as `scoop-resilient-0.1.0.zip` to the `v0.1.0` release after
+Upload that same archive as `scoop-resilient-0.1.1.zip` to the `v0.1.1` release after
 committing the source/manifest and pushing the tag. Regenerating an archive can
 change its hash; regenerate the manifest too, or pass `-ArchivePath` to hash an
 already-built archive. `dist` is ignored by Git.

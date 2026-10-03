@@ -55,6 +55,7 @@ $manifest = [ordered]@{
     url = $downloadUrl
     hash = $hash
     bin = @('scoop-upgrade.ps1', 'scoop-tidy.ps1')
+    post_install = '& "$dir\lib\register-shims.ps1" -InstallDirectory $dir -ShimDirectory (shimdir $global)'
     checkver = [ordered]@{
         github = $homepage
     }
