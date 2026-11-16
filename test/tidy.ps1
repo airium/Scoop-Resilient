@@ -143,6 +143,70 @@ try {
     Assert-Tidy (Test-Path (Join-Path $healthy '2.0/active.txt')) 'NO_JUNCTION current version must remain.'
     Assert-Tidy (!(Test-Path (Join-Path $healthy '1.0'))) 'NO_JUNCTION obsolete versions should be removed.'
 
+    # A missing current link is not limited to NO_JUNCTION installations. Scoop
+    # also falls back to completed-install metadata after a link goes missing.
+    Reset-TestInstallation 'windowsdesktop-runtime-8.0'
+    $runtime = New-TestApp windowsdesktop-runtime-8.0 -NoLink -Version '8.0.20'
+    $globalRuntime = New-TestApp windowsdesktop-runtime-8.0 -Global -NoLink -Legacy -Version '8.0.19'
+    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    foreach ($file in @('windowsdesktop-runtime-8.0#8.0.18#old.exe', 'windowsdesktop-runtime-8.0#8.0.19#global.exe', 'windowsdesktop-runtime-8.0#8.0.20#local.exe')) {
+        New-TestFile -Path (Join-Path $cache $file)
+    }
+    $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS = 'windowsdesktop-runtime-8.0'
+    $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = 'true'
+    $result = Invoke-TestTidy -Options @('-agk')
+    Assert-Tidy ($result.Code -eq 0 -and !$result.Output.Contains('[Metadata]')) $result.Output
+    Assert-Tidy (Test-Path (Join-Path $runtime '8.0.20/active.txt')) 'Missing-link cleanup must retain the completed local installation.'
+    Assert-Tidy (Test-Path (Join-Path $globalRuntime '8.0.19/active.txt')) 'Missing-link cleanup must retain the completed legacy/global installation.'
+    Assert-Tidy (!(Test-Path (Join-Path $runtime '1.0')) -and !(Test-Path (Join-Path $globalRuntime '1.0'))) 'Missing-link cleanup must remove obsolete versions in both scopes.'
+    Assert-Tidy (!(Test-Path (Join-Path $cache 'windowsdesktop-runtime-8.0#8.0.18#old.exe'))) 'Missing-link cleanup must remove obsolete cache.'
+    foreach ($file in @('windowsdesktop-runtime-8.0#8.0.19#global.exe', 'windowsdesktop-runtime-8.0#8.0.20#local.exe')) {
+        Assert-Tidy (Test-Path (Join-Path $cache $file)) 'Missing-link cleanup must protect both scopes in the shared cache.'
+    }
+    $result = Invoke-TestTidy -Options @('-agk')
+    Assert-Tidy ($result.Code -eq 0 -and $result.Output.Contains('Current: 2')) $result.Output
+    Assert-Tidy (!(Test-Path (Join-Path $runtime 'current'))) 'Cleanup must not recreate a missing current link.'
+
+    Reset-TestInstallation 'healthy'
+    $healthy = New-TestApp healthy -NoLink
+    New-TestFile -Path (Join-Path $healthy '1.0/scoop-install.json') -Contents '{"architecture":"64bit"}'
+    New-TestFile -Path (Join-Path $healthy '1.0/scoop-manifest.json') -Contents '{"version":"1.0"}'
+    (Get-Item -LiteralPath (Join-Path $healthy '1.0/scoop-install.json')).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(10)
+    $result = Invoke-TestTidy
+    Assert-Tidy ($result.Code -eq 0 -and !$result.Output.Contains('[Metadata]')) $result.Output
+    Assert-Tidy (Test-Path (Join-Path $healthy '1.0/old.txt')) 'The last installed version must win even after a downgrade.'
+    Assert-Tidy (!(Test-Path (Join-Path $healthy '2.0'))) 'Missing-link selection must not use the highest version number.'
+
+    foreach ($damage in @('missing', 'tied', 'invalid', 'empty', 'mismatch', 'dangling')) {
+        Reset-TestInstallation 'healthy'
+        $healthy = New-TestApp healthy -NoLink
+        switch ($damage) {
+            'missing' { Remove-Item -LiteralPath (Join-Path $healthy '2.0/scoop-install.json') -Force }
+            'tied' {
+                New-TestFile -Path (Join-Path $healthy '1.0/install.json') -Contents '{"architecture":"64bit"}'
+                $timestamp = (Get-Item -LiteralPath (Join-Path $healthy '2.0/scoop-install.json')).LastWriteTimeUtc
+                (Get-Item -LiteralPath (Join-Path $healthy '1.0/install.json')).LastWriteTimeUtc = $timestamp
+            }
+            'invalid' { New-TestFile -Path (Join-Path $healthy '2.0/scoop-install.json') -Contents '{invalid' }
+            'empty' { New-TestFile -Path (Join-Path $healthy '2.0/scoop-install.json') -Contents 'null' }
+            'mismatch' { New-TestFile -Path (Join-Path $healthy '2.0/scoop-manifest.json') -Contents '{"version":"3.0"}' }
+            'dangling' {
+                $target = Join-Path $healthy '3.0'
+                New-Item -ItemType Directory -Path $target | Out-Null
+                New-TestLink -Path (Join-Path $healthy 'current') -Target $target
+                [IO.Directory]::Delete($target, $false)
+            }
+        }
+        $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+        New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain.zip')
+        $result = Invoke-TestTidy -Options @('-ak')
+        # PS 5.1 may not resolve dangling junctions with Get-Item during teardown.
+        if ($damage -eq 'dangling') { [IO.Directory]::Delete((Join-Path $healthy 'current'), $false) }
+        Assert-Tidy ($result.Code -eq 0 -and $result.Output.Contains('[Metadata]')) "Unsafe missing-link metadata ($damage) must be skipped: $($result.Output)"
+        Assert-Tidy (Test-Path (Join-Path $healthy '1.0/old.txt')) "Unsafe missing-link metadata ($damage) must preserve all versions."
+        Assert-Tidy (Test-Path (Join-Path $cache 'healthy#1.0#retain.zip')) "Unsafe missing-link metadata ($damage) must preserve app cache."
+    }
+
     Reset-TestInstallation 'healthy'
     $env:SCOOP_RESILIENT_TEST_NO_JUNCTION = 'true'
     $healthy = New-TestApp healthy -NoLink
@@ -195,6 +259,14 @@ try {
     Assert-Tidy ($result.Code -eq 0) $result.Output
     Assert-Tidy (Test-Path (Join-Path $healthy 'nightly-20261003/active.txt')) 'Nightly must retain the dated current target.'
     Assert-Tidy (!(Test-Path (Join-Path $healthy '1.0'))) 'Nightly old versions should be removed.'
+
+    Reset-TestInstallation 'healthy'
+    $healthy = New-TestApp healthy -NoLink -Version 'nightly-20261003'
+    New-TestFile -Path (Join-Path $healthy 'nightly-20261003/scoop-manifest.json') -Contents '{"version":"nightly"}'
+    $result = Invoke-TestTidy
+    Assert-Tidy ($result.Code -eq 0 -and !$result.Output.Contains('[Metadata]')) $result.Output
+    Assert-Tidy (Test-Path (Join-Path $healthy 'nightly-20261003/active.txt')) 'Missing-link fallback must retain the dated nightly directory.'
+    Assert-Tidy (!(Test-Path (Join-Path $healthy '1.0'))) 'Missing-link nightly cleanup must remove obsolete versions.'
 
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
@@ -363,6 +435,22 @@ try {
     Assert-Tidy (Test-Path (Join-Path $cache 'healthy#1.0#retain-after-switch.zip')) 'A cache file that became current after planning must survive.'
     Assert-Tidy (Test-Path (Join-Path $healthy '3.0/in-progress.txt')) 'Directories created after planning must be deferred rather than removed.'
     Assert-Tidy (!(Test-Path (Join-Path $healthy '1.5'))) 'Other planned obsolete versions should still be removed.'
+
+    Reset-TestInstallation 'healthy'
+    $healthy = New-TestApp healthy -NoLink
+    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain-after-switch.zip')
+    $plan = Invoke-PreflightProcess -Targets @([PSCustomObject]@{ Name = 'healthy'; Global = $false; Info = '' })
+    Assert-Tidy ($null -ne $plan -and $plan.Jobs.Count -eq 1) 'Expected one missing-link cleanup job before changing metadata.'
+    Set-TidyJobPlan -Jobs @($plan.Jobs)
+    New-TestFile -Path (Join-Path $healthy '1.0/scoop-manifest.json') -Contents '{"version":"1.0"}'
+    New-TestFile -Path (Join-Path $healthy '1.0/scoop-install.json') -Contents '{"architecture":"64bit"}'
+    (Get-Item -LiteralPath (Join-Path $healthy '1.0/scoop-install.json')).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(10)
+    $outcomes = @(Invoke-TidyProcess -Name healthy -Global $false)
+    Assert-Tidy (@($outcomes | Where-Object { $_.Status -eq 'Failed' }).Count -eq 0) ($outcomes | ConvertTo-Json)
+    Assert-Tidy (Test-Path (Join-Path $healthy '1.0/old.txt')) 'Missing-link workers must revalidate the last completed installation before deleting.'
+    Assert-Tidy (Test-Path (Join-Path $cache 'healthy#1.0#retain-after-switch.zip')) 'Missing-link workers must protect cache that became current after planning.'
+    Assert-Tidy (!(Test-Path (Join-Path $healthy '1.5'))) 'Metadata changes must not block safe, planned obsolete versions.'
 
     Write-Host 'All scoop-tidy filesystem and integration tests passed.' -ForegroundColor Green
 } finally {

@@ -98,10 +98,14 @@ core's configured paths, but use dedicated cleanup logic instead of invoking
 `scoop cleanup`. Each old version and cache file has its own error handler.
 
 Cleanup preserves the `current` directory and the active version. It recognizes
-both Scoop 0.6.0's prefixed metadata filenames and legacy filenames. In
-`NO_JUNCTION` mode, it follows Scoop's installation-timestamp selection, requiring
-readable, consistent metadata and an unambiguous current version. If the current
-version cannot be established safely, the app is skipped with an explanation.
+both Scoop 0.6.0's prefixed metadata filenames and legacy filenames. When `current`
+is absent, or in `NO_JUNCTION` mode, it follows Scoop's installation-timestamp
+selection: retain the last completed installation, not necessarily the highest
+version number. This requires readable, consistent metadata and a unique newest
+installation timestamp. Missing links are not recreated. Broken links, invalid or
+ambiguous metadata, and installations with no completed-install metadata are
+skipped with an explanation rather than risking active files. Cleanup only
+removes files managed by Scoop; it does not uninstall system-wide .NET runtimes.
 
 Directory junctions and symbolic links inside old versions are unlinked without
 traversing their targets. Hard-linked persisted files are removed only from the
@@ -198,13 +202,13 @@ Remove the development shims with `scoop shim rm scoop-upgrade` and
 Generate the bundle and matching manifest:
 
 ```powershell
-./scripts/new-manifest.ps1 -Version 0.2.1 -License MIT
+./scripts/new-manifest.ps1 -Version 0.2.2 -License MIT
 ```
 
-This creates `dist/scoop-resilient-0.2.1.zip` and `bucket/scoop-resilient.json`. The archive
+This creates `dist/scoop-resilient-0.2.2.zip` and `bucket/scoop-resilient.json`. The archive
 contains both entry scripts, shared libraries, and this README. The manifest
 hashes that exact archive and references the corresponding GitHub release asset.
-Upload that same archive as `scoop-resilient-0.2.1.zip` to the `v0.2.1` release after
+Upload that same archive as `scoop-resilient-0.2.2.zip` to the `v0.2.2` release after
 committing the source/manifest and pushing the tag. Regenerating an archive can
 change its hash; regenerate the manifest too, or pass `-ArchivePath` to hash an
 already-built archive. `dist` is ignored by Git.
@@ -224,8 +228,9 @@ pwsh -NoProfile -File ./test/run.ps1
 The suite checks upgrade argument parity, scopes, freshness, option forwarding,
 failure classification, stderr handling, and elevation. Filesystem tests check
 cleanup continuation within/across apps, current and persisted data preservation,
-legacy/prefixed metadata, `NO_JUNCTION`, cache failures, shared cache retention,
-and global cleanup. Release tests unpack the bundle and execute both entry points through real Scoop
+legacy/prefixed metadata, missing/broken current links, `NO_JUNCTION`, cache
+failures, shared cache retention, and global cleanup. Release tests unpack the
+bundle and execute both entry points through real Scoop
 shims. Planning tests verify worker counts, force/hold handling, global scope,
 fallback after planner failure, and live-state revalidation before deletion.
 

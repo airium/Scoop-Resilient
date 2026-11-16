@@ -1,11 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Resilient Scoop update and cleanup commands",
   "homepage": "https://github.com/airium/Scoop-Resilient",
   "license": "MIT",
-  "url": "https://github.com/airium/Scoop-Resilient/releases/download/v0.2.1/scoop-resilient-0.2.1.zip",
-  "hash": "c49b36113574adde2e9830da7d1365f315fabe248ff7c2e6860dff763d439e46",
+  "url": "https://github.com/airium/Scoop-Resilient/releases/download/v0.2.2/scoop-resilient-0.2.2.zip",
+  "hash": "eff84e9d1e5c0c1463af0e24f8208b1927e8a0647ef49dbd2bc083ad31e7ebae",
   "bin": [
     "scoop-upgrade.ps1",
     "scoop-tidy.ps1"

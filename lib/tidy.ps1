@@ -19,9 +19,20 @@ function Get-TidyCurrentVersion {
         throw 'The app directory must be a regular directory.'
     }
     $AppDirectory = $root.FullName
-    if (get_config NO_JUNCTION) {
-        # Match Scoop's timestamp-based selection for NO_JUNCTION, but require
-        # readable metadata rather than guessing when an installation is damaged.
+    $currentPath = Join-Path $AppDirectory 'current'
+    $current = $null
+    try { $current = Get-Item -LiteralPath $currentPath -Force -ErrorAction Stop }
+    catch {
+        if ($_.CategoryInfo.Category -ne [Management.Automation.ErrorCategory]::ObjectNotFound) { throw }
+        # Some PowerShell/filesystem combinations cannot resolve a dangling link
+        # with Get-Item. It must not be mistaken for an absent current entry.
+        $entries = @(Get-ChildItem -LiteralPath $AppDirectory -Force -ErrorAction Stop | Where-Object { $_.Name -eq 'current' })
+        if ($entries.Count) { throw 'The current entry cannot be read; repair it before cleanup.' }
+    }
+    if ((get_config NO_JUNCTION) -or !$current) {
+        # Scoop also uses installation timestamps when current is absent, not
+        # just in NO_JUNCTION mode. Never fall back from an existing broken link
+        # or corrupt current manifest to an older installation.
         $candidates = foreach ($directory in Get-ChildItem -LiteralPath $AppDirectory -Directory -Force -ErrorAction Stop) {
             if ($directory.Name -eq 'current' -or $directory.Name -like '_*.old*' -or
                 ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
@@ -33,22 +44,26 @@ function Get-TidyCurrentVersion {
             if ($info) { [PSCustomObject]@{ Directory = $directory; Updated = $info.LastWriteTimeUtc } }
         }
         $candidates = @($candidates | Sort-Object Updated)
-        if (!$candidates.Count) { throw 'No installation metadata identifies a current version.' }
+        if (!$candidates.Count) { throw 'No completed installation metadata identifies a current version; the installation may be incomplete.' }
         if ($candidates.Count -gt 1 -and $candidates[-1].Updated -eq $candidates[-2].Updated) {
             throw 'Installation timestamps do not identify a unique current version.'
         }
         $selected = $candidates[-1].Directory
-        $null = Read-TidyMetadata -Directory $selected.FullName -Kind 'install'
+        $install = Read-TidyMetadata -Directory $selected.FullName -Kind 'install'
+        if ($install -isnot [PSCustomObject] -or !$install.architecture) {
+            throw 'The selected installation metadata has no valid architecture.'
+        }
         $manifest = Read-TidyMetadata -Directory $selected.FullName -Kind 'manifest'
         $version = [string]$manifest.version
         if ($version -ne $selected.Name -and !($version -eq 'nightly' -and $selected.Name -like 'nightly-*')) {
             throw 'The selected version directory and manifest disagree.'
         }
-        $existingLink = $null
-        try { $existingLink = Get-Item -LiteralPath (Join-Path $AppDirectory 'current') -Force -ErrorAction Stop }
-        catch { if ($_.CategoryInfo.Category -ne [Management.Automation.ErrorCategory]::ObjectNotFound) { throw } }
-        if ($existingLink -and ($existingLink.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-            $target = [string]@($existingLink.Target)[0]
+        if ($current -and ($current.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            $targets = @($current.Target)
+            if ($targets.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$targets[0])) {
+                throw 'The current link has no unambiguous target.'
+            }
+            $target = [string]$targets[0]
             if (![IO.Path]::IsPathRooted($target)) { $target = Join-Path $AppDirectory $target }
             if (![string]::Equals([IO.Path]::GetFullPath($target), $selected.FullName, [StringComparison]::OrdinalIgnoreCase)) {
                 throw 'NO_JUNCTION selection disagrees with the existing current link.'
@@ -56,8 +71,6 @@ function Get-TidyCurrentVersion {
         }
         return $selected.Name
     }
-    $currentPath = Join-Path $AppDirectory 'current'
-    $current = Get-Item -LiteralPath $currentPath -Force -ErrorAction Stop
     $manifest = Read-TidyMetadata -Directory $currentPath -Kind 'manifest'
     $version = [string]$manifest.version
     if ($version -notmatch '^[A-Za-z0-9_.+-]+$' -or $version -in @('.', '..', 'current')) {
