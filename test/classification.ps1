@@ -2,6 +2,8 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'lib/common.ps1')
+$repairDiagnostic = "ERROR 'app' isn't installed correctly."
+$repairSuccess = "'app' (1.1) was installed successfully!"
 $cases = @(
     @{ Name = 'inline admin'; Text = 'Checking hash... OK.', 'Running pre_uninstall script... ERROR clash-verge-rev requires admin rights to update'; Status = 'Failed'; Category = 'Elevation' },
     @{ Name = 'admin nonzero'; Code = 1; Text = 'Running pre_uninstall script... ERROR app requires admin rights to update'; Status = 'Failed'; Category = 'Elevation' },
@@ -25,6 +27,14 @@ $cases = @(
     @{ Name = 'error prose'; Text = 'Installer completed without an error.', 'Installed successfully!'; Status = 'Completed'; Category = 'Success' },
     @{ Name = 'lowercase error'; Text = 'Running hook... error: access denied'; Status = 'Failed'; Category = 'Permission' },
     @{ Name = 'version 404'; Text = 'Updating app 404 -> 405', 'Installed successfully!'; Status = 'Completed'; Category = 'Success' },
+    @{ Name = 'successful repair'; Text = $repairDiagnostic, "Updating 'app' (1.0 -> 1.1)", $repairSuccess; Status = 'Completed'; Category = 'Success' },
+    @{ Name = 'unresolved repair'; Text = $repairDiagnostic, 'app: 1.0 (latest version)'; Status = 'Failed'; Category = 'Unknown' },
+    @{ Name = 'only dependency installed'; Text = $repairDiagnostic, "'app-helper' (1.1) was installed successfully!"; Status = 'Failed'; Category = 'Unknown' },
+    @{ Name = 'repair error after success'; Text = $repairSuccess, $repairDiagnostic; Status = 'Failed'; Category = 'Unknown' },
+    @{ Name = 'repair with bare installer failure'; Text = $repairDiagnostic, 'Installation aborted.'; Status = 'Failed'; Category = 'Installer' },
+    @{ Name = 'repair with another error despite success'; Text = $repairDiagnostic, 'Running installer script... ERROR requires admin rights', $repairSuccess; Status = 'Failed'; Category = 'Elevation' },
+    @{ Name = 'repair with later error'; Text = $repairDiagnostic, $repairSuccess, 'ERROR Access is denied.'; Status = 'Failed'; Category = 'Permission' },
+    @{ Name = 'repair with nonzero exit despite success'; Code = 23; Text = $repairDiagnostic, $repairSuccess; Status = 'Failed'; Category = 'Unknown' },
     @{ Name = 'current'; Text = 'app: 1.0 (latest version)'; Status = 'Current'; Category = 'Current' },
     @{ Name = 'nonzero unknown'; Code = 23; Text = 'Unexpected termination.'; Status = 'Failed'; Category = 'Unknown' }
 )

@@ -38,6 +38,7 @@ switch ($CommandArguments[0]) {
             $info = switch ($name) {
                 'held' { 'Held package' }
                 'damaged' { 'Install failed' }
+                'windowsdesktop-runtime-10.0' { 'Install failed' }
                 { $_ -like 'global-*' } { 'Global install' }
                 default { '' }
             }
@@ -71,6 +72,16 @@ switch ($CommandArguments[0]) {
         switch ($app) {
             'clash-verge-rev' { Write-Output 'Checking hash... OK.'; Write-Output 'Running pre_uninstall script... ERROR clash-verge-rev requires admin rights to update'; exit 0 }
             'copyq' { Write-Output 'ERROR The following instances of "copyq" are still running. Close them and try again.'; Write-Output 'Running process detected, skip updating.'; exit 0 }
+            'windowsdesktop-runtime-10.0' {
+                Write-Output "ERROR '$app' isn't installed correctly."
+                Write-Output "${app}: 10.0.14 -> 10.0.15"
+                Write-Output 'Updating one outdated app:'
+                Write-Output "Updating '$app' (10.0.14 -> 10.0.15)"
+                Write-Output 'Running installer script... Done.'
+                Write-Output "'$app' (10.0.15) was installed successfully!"
+                Write-Output "Notes`n-----`nYou can now remove this installer with 'scoop uninstall -p $app'`n-----"
+                exit 0
+            }
             'stderr-success' { [Console]::Error.WriteLine('Harmless native diagnostic'); Write-Output 'Finished after stderr.'; exit 0 }
             'missing-current' { Write-Output "ERROR No manifest available for 'missing-current'."; Write-Output 'missing-current: 1.0 (latest version)'; exit 0 }
             'fatal-current' { Write-Output 'fatal: injected repository error'; Write-Output 'fatal-current: 1.0 (latest version)'; exit 0 }

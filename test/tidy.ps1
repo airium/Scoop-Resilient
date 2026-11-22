@@ -201,7 +201,11 @@ try {
         New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain.zip')
         $result = Invoke-TestTidy -Options @('-ak')
         # PS 5.1 may not resolve dangling junctions with Get-Item during teardown.
-        if ($damage -eq 'dangling') { [IO.Directory]::Delete((Join-Path $healthy 'current'), $false) }
+        if ($damage -eq 'dangling') {
+            $link = Join-Path $healthy 'current'
+            if ($env:OS -eq 'Windows_NT') { [IO.Directory]::Delete($link, $false) }
+            else { [IO.File]::Delete($link) }
+        }
         Assert-Tidy ($result.Code -eq 0 -and $result.Output.Contains('[Metadata]')) "Unsafe missing-link metadata ($damage) must be skipped: $($result.Output)"
         Assert-Tidy (Test-Path (Join-Path $healthy '1.0/old.txt')) "Unsafe missing-link metadata ($damage) must preserve all versions."
         Assert-Tidy (Test-Path (Join-Path $cache 'healthy#1.0#retain.zip')) "Unsafe missing-link metadata ($damage) must preserve app cache."

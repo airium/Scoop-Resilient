@@ -196,6 +196,14 @@ try {
     Assert-Contains $inlineHook.Output 'healthy [Success]' 'A hook failure must not stop later app workers.'
     Assert-Contains $inlineHook.Output 'Failed: 1' 'The failed hook must be counted accurately.'
 
+    $repaired = Invoke-Scenario -FailApp '' -Apps 'copyq,windowsdesktop-runtime-10.0' -IsAdministrator true
+    Assert-Equal 0 $repaired.ExitCode 'A successful repair and a running-app skip must not fail the batch.'
+    Assert-Contains $repaired.Output "ERROR 'windowsdesktop-runtime-10.0' isn't installed correctly." 'Scoop diagnostics must stay visible.'
+    Assert-Contains $repaired.Output 'windowsdesktop-runtime-10.0 [Success]' 'The runtime should be reported as successfully repaired.'
+    Assert-Contains $repaired.Output 'Completed: 1' 'The repaired runtime should count as completed.'
+    Assert-Contains $repaired.Output 'Failed: 0' 'A repaired installation is not a failed update.'
+    Assert-Contains $repaired.Output 'copyq [Running]' 'The running app should still be skipped.'
+
     $elevationDisabled = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one,global-two' -IsAdministrator false -NoElevationPrompt -CommandOptions @('-ag')
     Assert-Equal 0 $elevationDisabled.ExitCode 'Skipped global apps should not make a non-elevated run fail.'
     Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy') $elevationDisabled.Calls 'Disabled elevation should leave global apps untouched.'

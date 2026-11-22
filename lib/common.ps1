@@ -218,7 +218,22 @@ function ConvertTo-AppOutcome {
     $diagnostics = [System.Collections.Generic.List[string]]::new()
     $explicit = [System.Collections.Generic.List[string]]::new()
     $running = [System.Collections.Generic.List[string]]::new()
+    $repairDiagnostic = "ERROR '$Name' isn't installed correctly."
+    $installSuccessPattern = "^'$([regex]::Escape($Name))' \([^)]+\) was installed successfully!$"
+    $repairPending = $false
+    $repaired = $false
     foreach ($line in $lines) {
+        # Scoop's pre-update check reports the old installation's condition.
+        # Clear just that diagnostic if Scoop later installs the same app.
+        if ($line -eq $repairDiagnostic) {
+            $repairPending = $true
+            continue
+        }
+        if ($repairPending -and $line -match $installSuccessPattern) {
+            $repairPending = $false
+            $repaired = $true
+            continue
+        }
         # Warnings can describe recoverable download failures or harmless installer
         # side effects. They are not failure evidence for a zero-exit command.
         if ($line -match '(?i)^\s*(?:WARN(?:ING)?|INFO|DEBUG)\b') { continue }
@@ -244,12 +259,17 @@ function ConvertTo-AppOutcome {
             }
         }
     }
-    $failed = $CommandResult.ExitCode -ne 0 -or $explicit.Count -gt 0 -or $diagnostics.Count -gt 0
+    if ($repairPending) { [void]$diagnostics.Add($repairDiagnostic) }
+    $failed = $CommandResult.ExitCode -ne 0 -or $diagnostics.Count -gt 0
     if ($failed) {
         # A real failure must take precedence over 'current' or 'running' text
         # elsewhere in the same command output. Prefer explicit errors over prose.
         [string[]]$evidence = if ($explicit.Count) { $explicit.ToArray() } else { $diagnostics.ToArray() }
-        if ($null -eq $evidence -or !$evidence.Length) { $evidence = [string[]]$lines }
+        if ($null -eq $evidence -or !$evidence.Length) {
+            $evidence = [string[]]@($lines | Where-Object {
+                !$repaired -or ($_ -ne $repairDiagnostic -and $_ -notmatch $installSuccessPattern)
+            })
+        }
         $classification = $null
         foreach ($definition in $definitions) {
             if (@($evidence | Where-Object { $_ -match $definition.Pattern }).Count) { $classification = $definition; break }
@@ -266,6 +286,9 @@ function ConvertTo-AppOutcome {
     }
     if ($running.Count) {
         return New-Outcome -Name $Name -Global:$Global -Status Skipped -Category Running -Reason $running[0] -Details $CommandResult.Output
+    }
+    if ($repaired) {
+        return New-Outcome -Name $Name -Global:$Global -Status Completed -Category Success -Reason 'Scoop repaired the installation.' -Details $CommandResult.Output
     }
     $currentPattern = "(?im)(?:latest version of '.+' \(.+\) is already installed|^[A-Za-z0-9_.-]+:\s+.+\s+\(latest version\)\s*$)"
     if ($text -match $currentPattern) {

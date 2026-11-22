@@ -73,9 +73,12 @@ categories as nonzero exits. Missing administrator rights are reported as
 `Elevation`; permission, hash, download, manifest, architecture, extraction,
 installer and file-in-use diagnostics retain their categories. Failure evidence
 takes precedence over later current/running messages, while harmless warnings
-and successful downloader fallbacks do not become failures. Running apps are
-reported as skipped, and already-current apps are reported as current. Classification of arbitrary
-installer output is best effort; original diagnostics remain visible.
+and successful downloader fallbacks do not become failures. If Scoop reports
+that an app isn't installed correctly and then installs that same app successfully,
+the repair counts as completed. Other errors and nonzero exits still count as
+failures. Running apps are skipped, and already-current apps count as current.
+Classification of arbitrary installer output is best effort; original diagnostics
+remain visible.
 
 ## Tidy
 
@@ -202,13 +205,13 @@ Remove the development shims with `scoop shim rm scoop-upgrade` and
 Generate the bundle and matching manifest:
 
 ```powershell
-./scripts/new-manifest.ps1 -Version 0.2.2 -License MIT
+./scripts/new-manifest.ps1 -Version 0.2.3 -License MIT
 ```
 
-This creates `dist/scoop-resilient-0.2.2.zip` and `bucket/scoop-resilient.json`. The archive
+This creates `dist/scoop-resilient-0.2.3.zip` and `bucket/scoop-resilient.json`. The archive
 contains both entry scripts, shared libraries, and this README. The manifest
 hashes that exact archive and references the corresponding GitHub release asset.
-Upload that same archive as `scoop-resilient-0.2.2.zip` to the `v0.2.2` release after
+Upload that same archive as `scoop-resilient-0.2.3.zip` to the `v0.2.3` release after
 committing the source/manifest and pushing the tag. Regenerating an archive can
 change its hash; regenerate the manifest too, or pass `-ArchivePath` to hash an
 already-built archive. `dist` is ignored by Git.
