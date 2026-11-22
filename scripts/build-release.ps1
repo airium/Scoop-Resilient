@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $normalizedVersion = $Version -replace '^v', ''
-if (!$OutputPath) { $OutputPath = Join-Path $projectRoot "dist/scoop-resilient-$normalizedVersion.zip" }
+if (!$OutputPath) { $OutputPath = Join-Path $projectRoot "dist/scoop-airified-$normalizedVersion.zip" }
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
 $directory = Split-Path -Parent $OutputPath
 New-Item -ItemType Directory -Path $directory -Force | Out-Null

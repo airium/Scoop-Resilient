@@ -9,10 +9,10 @@ if (!(Test-Path (Join-Path $core 'bin/scoop.ps1'))) { throw 'Scoop 0.6.0 is requ
 $hostExecutable = (Get-Process -Id $PID).Path
 $temp = Join-Path ([IO.Path]::GetTempPath()) "scoop shim tests O'Brien $([Guid]::NewGuid().ToString('N'))"
 $variables = @('SCOOP', 'SCOOP_GLOBAL', 'SCOOP_CACHE', 'XDG_CONFIG_HOME',
-    'SCOOP_RESILIENT_SCOOP_COMMAND', 'SCOOP_UPGRADE_SCOOP_COMMAND', 'SCOOP_RESILIENT_TEST_LOG',
-    'SCOOP_RESILIENT_TEST_APPS', 'SCOOP_RESILIENT_TEST_GLOBAL_APPS', 'SCOOP_RESILIENT_TEST_NATIVE_SCOOP',
-    'SCOOP_RESILIENT_TEST_CORE', 'SCOOP_RESILIENT_TEST_FAIL_APP', 'SCOOP_RESILIENT_TEST_EXPORT_FAILURE',
-    'SCOOP_RESILIENT_TEST_SYNC_FAILURE', 'SCOOP_RESILIENT_TEST_FRESH', 'SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR')
+    'SCOOP_AIRIFIED_SCOOP_COMMAND', 'SCOOP_UPGRADE_SCOOP_COMMAND', 'SCOOP_AIRIFIED_TEST_LOG',
+    'SCOOP_AIRIFIED_TEST_APPS', 'SCOOP_AIRIFIED_TEST_GLOBAL_APPS', 'SCOOP_AIRIFIED_TEST_NATIVE_SCOOP',
+    'SCOOP_AIRIFIED_TEST_CORE', 'SCOOP_AIRIFIED_TEST_FAIL_APP', 'SCOOP_AIRIFIED_TEST_EXPORT_FAILURE',
+    'SCOOP_AIRIFIED_TEST_SYNC_FAILURE', 'SCOOP_AIRIFIED_TEST_FRESH', 'SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR')
 $previous = @{}
 foreach ($name in $variables) { $previous[$name] = [Environment]::GetEnvironmentVariable($name) }
 function Quote-TestLiteral($Value) { return "'" + $Value.Replace("'", "''") + "'" }
@@ -32,7 +32,7 @@ try {
     $env:XDG_CONFIG_HOME = Join-Path $temp 'config'
     $shims = Join-Path $env:SCOOP 'shims'
     New-Item -ItemType Directory -Path $shims, $env:SCOOP_CACHE -Force | Out-Null
-    $package = Join-Path $env:SCOOP 'apps/scoop-resilient/current'
+    $package = Join-Path $env:SCOOP 'apps/scoop-airified/current'
     New-Item -ItemType Directory -Path $package -Force | Out-Null
     Get-ChildItem -LiteralPath $InstallDirectory | Copy-Item -Destination $package -Recurse
     $fixture = Join-Path $PSScriptRoot 'fixtures/fake-scoop.ps1'
@@ -45,17 +45,17 @@ try {
         @('#!/bin/sh', "exec '$hostExecutable' -NoProfile -File '$fixture' `"`$@`"") | Set-Content -LiteralPath $backend -Encoding ASCII
         & chmod +x $backend
     }
-    $env:SCOOP_RESILIENT_SCOOP_COMMAND = $backend
-    $env:SCOOP_RESILIENT_TEST_LOG = Join-Path $temp 'calls.log'
-    $env:SCOOP_RESILIENT_TEST_APPS = 'broken,healthy'
-    $env:SCOOP_RESILIENT_TEST_FAIL_APP = 'broken'
-    $env:SCOOP_RESILIENT_TEST_CORE = $core
-    $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS = ''
-    $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP = ''
-    $env:SCOOP_RESILIENT_TEST_EXPORT_FAILURE = 'false'
-    $env:SCOOP_RESILIENT_TEST_SYNC_FAILURE = 'false'
-    $env:SCOOP_RESILIENT_TEST_FRESH = 'true'
-    $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = 'false'
+    $env:SCOOP_AIRIFIED_SCOOP_COMMAND = $backend
+    $env:SCOOP_AIRIFIED_TEST_LOG = Join-Path $temp 'calls.log'
+    $env:SCOOP_AIRIFIED_TEST_APPS = 'broken,healthy'
+    $env:SCOOP_AIRIFIED_TEST_FAIL_APP = 'broken'
+    $env:SCOOP_AIRIFIED_TEST_CORE = $core
+    $env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS = ''
+    $env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP = ''
+    $env:SCOOP_AIRIFIED_TEST_EXPORT_FAILURE = 'false'
+    $env:SCOOP_AIRIFIED_TEST_SYNC_FAILURE = 'false'
+    $env:SCOOP_AIRIFIED_TEST_FRESH = 'true'
+    $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = 'false'
     foreach ($name in @('broken', 'healthy')) {
         $app = Join-Path $env:SCOOP "apps/$name"
         $active = Join-Path $app '2.0'

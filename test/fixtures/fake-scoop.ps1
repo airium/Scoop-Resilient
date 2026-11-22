@@ -5,34 +5,34 @@ param(
 
 Set-StrictMode -Version 2.0
 
-Add-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_LOG -Value ($CommandArguments -join ' ')
+Add-Content -LiteralPath $env:SCOOP_AIRIFIED_TEST_LOG -Value ($CommandArguments -join ' ')
 
 if ($CommandArguments.Count -eq 0) {
     exit 64
 }
 
-if ($env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP) {
-    & $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP @CommandArguments
+if ($env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP) {
+    & $env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP @CommandArguments
     exit $LASTEXITCODE
 }
 
 switch ($CommandArguments[0]) {
     'config' {
-        if ($env:SCOOP_RESILIENT_TEST_FRESH -eq 'true') { [DateTime]::Now.ToString('o') }
+        if ($env:SCOOP_AIRIFIED_TEST_FRESH -eq 'true') { [DateTime]::Now.ToString('o') }
         else { [DateTime]::Now.AddHours(-4).ToString('o') }
         exit 0
     }
-    'prefix' { Write-Output $env:SCOOP_RESILIENT_TEST_CORE; exit 0 }
+    'prefix' { Write-Output $env:SCOOP_AIRIFIED_TEST_CORE; exit 0 }
 
     'export' {
-        if ($env:SCOOP_RESILIENT_TEST_EXPORT_FAILURE -eq 'true') {
+        if ($env:SCOOP_AIRIFIED_TEST_EXPORT_FAILURE -eq 'true') {
             exit 19
         }
 
-        $appNames = if ([string]::IsNullOrWhiteSpace($env:SCOOP_RESILIENT_TEST_APPS)) {
+        $appNames = if ([string]::IsNullOrWhiteSpace($env:SCOOP_AIRIFIED_TEST_APPS)) {
             @('broken', 'healthy', 'held', 'damaged')
         } else {
-            @($env:SCOOP_RESILIENT_TEST_APPS -split ',')
+            @($env:SCOOP_AIRIFIED_TEST_APPS -split ',')
         }
         $apps = foreach ($name in $appNames) {
             $info = switch ($name) {
@@ -44,8 +44,8 @@ switch ($CommandArguments[0]) {
             }
             @{ Name = $name; Version = '1.0'; Source = 'main'; Info = $info }
         }
-        if ($env:SCOOP_RESILIENT_TEST_GLOBAL_APPS) {
-            $apps = @($apps) + @($env:SCOOP_RESILIENT_TEST_GLOBAL_APPS -split ',' | ForEach-Object {
+        if ($env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS) {
+            $apps = @($apps) + @($env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS -split ',' | ForEach-Object {
                 @{ Name = $_; Version = '1.0'; Source = 'main'; Info = 'Global install' }
             })
         }
@@ -57,7 +57,7 @@ switch ($CommandArguments[0]) {
     }
     'update' {
         if ($CommandArguments.Count -eq 1) {
-            if ($env:SCOOP_RESILIENT_TEST_SYNC_FAILURE -eq 'true') {
+            if ($env:SCOOP_AIRIFIED_TEST_SYNC_FAILURE -eq 'true') {
                 exit 17
             }
             exit 0
@@ -65,7 +65,7 @@ switch ($CommandArguments[0]) {
 
         $app = $CommandArguments[1]
         Write-Output "Fake update: $app"
-        if ($app -eq $env:SCOOP_RESILIENT_TEST_FAIL_APP) {
+        if ($app -eq $env:SCOOP_AIRIFIED_TEST_FAIL_APP) {
             [Console]::Error.WriteLine('The remote server returned an error: (404) Not Found.')
             exit 23
         }

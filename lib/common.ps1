@@ -1,14 +1,16 @@
 # Shared command execution, diagnostics, summaries and elevation.
 
 function Resolve-ScoopCommand {
-    $override = $env:SCOOP_RESILIENT_SCOOP_COMMAND
+    $override = $env:SCOOP_AIRIFIED_SCOOP_COMMAND
+    # Keep older development and integration setups working after the rename.
+    if (!$override) { $override = $env:SCOOP_RESILIENT_SCOOP_COMMAND }
     if (!$override) { $override = $env:SCOOP_UPGRADE_SCOOP_COMMAND }
     if ($override) {
         if (Test-Path -LiteralPath $override -PathType Leaf) {
             return (Resolve-Path -LiteralPath $override).Path
         }
 
-        throw "SCOOP_UPGRADE_SCOOP_COMMAND does not point to a file: $override"
+        throw "The Scoop command override does not point to a file: $override"
     }
 
     $command = Get-Command 'scoop.cmd' -CommandType Application -ErrorAction SilentlyContinue |
@@ -99,8 +101,8 @@ function Test-AppInfoFlag {
 }
 
 function Test-IsAdministrator {
-    if ($env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR -in @('true', 'false')) {
-        return [Convert]::ToBoolean($env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR)
+    if ($env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR -in @('true', 'false')) {
+        return [Convert]::ToBoolean($env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR)
     }
 
     try {
@@ -454,7 +456,7 @@ function Test-CanPromptForElevation {
     if ($script:Options.NoElevationPrompt) {
         return $false
     }
-    if ($env:SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE) {
+    if ($env:SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE) {
         return $true
     }
     if (![Environment]::UserInteractive -or $Host.Name -eq 'ServerRemoteHost') {
@@ -470,7 +472,7 @@ function Test-CanPromptForElevation {
 function Confirm-ElevationRetry {
     param([int] $Count)
 
-    $answer = $env:SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE
+    $answer = $env:SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE
     if (!$answer) {
         $answer = Read-Host "$Count global app(s) require administrator rights. Retry them with one UAC prompt? [y/N]"
     }
@@ -484,7 +486,7 @@ function Invoke-ElevatedBatch {
         [string[]] $Apps
     )
 
-    switch ($env:SCOOP_RESILIENT_TEST_ELEVATION_STATE) {
+    switch ($env:SCOOP_AIRIFIED_TEST_ELEVATION_STATE) {
         'Canceled' {
             return [PSCustomObject]@{ State = 'Canceled'; Error = 'The UAC request was canceled.'; Results = @() }
         }
@@ -493,7 +495,7 @@ function Invoke-ElevatedBatch {
         }
     }
 
-    $tempDirectory = Join-Path ([IO.Path]::GetTempPath()) "scoop-resilient-elevated-$PID-$([Guid]::NewGuid().ToString('N'))"
+    $tempDirectory = Join-Path ([IO.Path]::GetTempPath()) "scoop-airified-elevated-$PID-$([Guid]::NewGuid().ToString('N'))"
     $resultFile = Join-Path $tempDirectory 'result.json'
     try {
         New-Item -ItemType Directory -Path $tempDirectory -ErrorAction Stop | Out-Null
@@ -522,13 +524,13 @@ function Invoke-ElevatedBatch {
         ) -join ' '
 
         try {
-            if ($env:SCOOP_RESILIENT_TEST_ELEVATION_BYPASS -eq 'true') {
-                $previousAdministrator = $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR
+            if ($env:SCOOP_AIRIFIED_TEST_ELEVATION_BYPASS -eq 'true') {
+                $previousAdministrator = $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR
                 try {
-                    $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = 'true'
+                    $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = 'true'
                     & $hostExecutable -NoProfile -ExecutionPolicy Bypass -File $script:EntryPoint --internal-elevated-worker $payload $resultFile 2>&1 | Out-Host
                     $workerExitCode = $LASTEXITCODE
-                } finally { $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = $previousAdministrator }
+                } finally { $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = $previousAdministrator }
             } else {
                 if ($env:OS -ne 'Windows_NT') {
                     throw 'UAC elevation is only available on Windows.'

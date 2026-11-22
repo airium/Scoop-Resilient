@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $commandPath = Join-Path $projectRoot 'scoop-upgrade.ps1'
 $fixturePath = Join-Path $PSScriptRoot 'fixtures/fake-scoop.ps1'
-$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "scoop-resilient-upgrade-$PID-$([Guid]::NewGuid().ToString('N'))"
+$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "scoop-airified-upgrade-$PID-$([Guid]::NewGuid().ToString('N'))"
 $logPath = Join-Path $tempRoot 'calls.log'
 $hostExecutable = (Get-Process -Id $PID).Path
 
@@ -75,14 +75,14 @@ function Invoke-Scenario {
     if (Test-Path -LiteralPath $logPath) {
         Remove-Item -LiteralPath $logPath -Force
     }
-    $env:SCOOP_RESILIENT_TEST_FAIL_APP = $FailApp
-    $env:SCOOP_RESILIENT_TEST_EXPORT_FAILURE = $ExportFailure.ToString().ToLowerInvariant()
-    $env:SCOOP_RESILIENT_TEST_SYNC_FAILURE = $SyncFailure.ToString().ToLowerInvariant()
-    $env:SCOOP_RESILIENT_TEST_APPS = $Apps
-    $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = $IsAdministrator
-    $env:SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE = $ElevationResponse
-    $env:SCOOP_RESILIENT_TEST_ELEVATION_STATE = $ElevationState
-    $env:SCOOP_RESILIENT_TEST_ELEVATION_BYPASS = $ElevationBypass.ToString().ToLowerInvariant()
+    $env:SCOOP_AIRIFIED_TEST_FAIL_APP = $FailApp
+    $env:SCOOP_AIRIFIED_TEST_EXPORT_FAILURE = $ExportFailure.ToString().ToLowerInvariant()
+    $env:SCOOP_AIRIFIED_TEST_SYNC_FAILURE = $SyncFailure.ToString().ToLowerInvariant()
+    $env:SCOOP_AIRIFIED_TEST_APPS = $Apps
+    $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = $IsAdministrator
+    $env:SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE = $ElevationResponse
+    $env:SCOOP_AIRIFIED_TEST_ELEVATION_STATE = $ElevationState
+    $env:SCOOP_AIRIFIED_TEST_ELEVATION_BYPASS = $ElevationBypass.ToString().ToLowerInvariant()
 
     $commandArguments = @('-NoProfile', '-File', $commandPath) + $CommandOptions
     if ($NoElevationPrompt) {
@@ -118,35 +118,35 @@ function Invoke-Scenario {
     }
 }
 
-$previousCore = $env:SCOOP_RESILIENT_TEST_CORE
-$previousWorkerLog = $env:SCOOP_RESILIENT_TEST_WORKER_LOG
-$previousStatusError = $env:SCOOP_RESILIENT_TEST_STATUS_ERROR
+$previousCore = $env:SCOOP_AIRIFIED_TEST_CORE
+$previousWorkerLog = $env:SCOOP_AIRIFIED_TEST_WORKER_LOG
+$previousStatusError = $env:SCOOP_AIRIFIED_TEST_STATUS_ERROR
 $previousCommand = $env:SCOOP_UPGRADE_SCOOP_COMMAND
-$previousToolsCommand = $env:SCOOP_RESILIENT_SCOOP_COMMAND
-$previousNativeScoop = $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP
-$previousGlobalApps = $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS
-$previousLog = $env:SCOOP_RESILIENT_TEST_LOG
-$previousFailApp = $env:SCOOP_RESILIENT_TEST_FAIL_APP
-$previousExportFailure = $env:SCOOP_RESILIENT_TEST_EXPORT_FAILURE
-$previousSyncFailure = $env:SCOOP_RESILIENT_TEST_SYNC_FAILURE
-$previousApps = $env:SCOOP_RESILIENT_TEST_APPS
-$previousIsAdministrator = $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR
-$previousElevationResponse = $env:SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE
-$previousElevationState = $env:SCOOP_RESILIENT_TEST_ELEVATION_STATE
-$previousElevationBypass = $env:SCOOP_RESILIENT_TEST_ELEVATION_BYPASS
+$previousToolsCommand = $env:SCOOP_AIRIFIED_SCOOP_COMMAND
+$previousNativeScoop = $env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP
+$previousGlobalApps = $env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS
+$previousLog = $env:SCOOP_AIRIFIED_TEST_LOG
+$previousFailApp = $env:SCOOP_AIRIFIED_TEST_FAIL_APP
+$previousExportFailure = $env:SCOOP_AIRIFIED_TEST_EXPORT_FAILURE
+$previousSyncFailure = $env:SCOOP_AIRIFIED_TEST_SYNC_FAILURE
+$previousApps = $env:SCOOP_AIRIFIED_TEST_APPS
+$previousIsAdministrator = $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR
+$previousElevationResponse = $env:SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE
+$previousElevationState = $env:SCOOP_AIRIFIED_TEST_ELEVATION_STATE
+$previousElevationBypass = $env:SCOOP_AIRIFIED_TEST_ELEVATION_BYPASS
 
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 try {
     $env:SCOOP_UPGRADE_SCOOP_COMMAND = New-FakeScoopCommand
-    $env:SCOOP_RESILIENT_SCOOP_COMMAND = $env:SCOOP_UPGRADE_SCOOP_COMMAND
-    $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP = ''
-    $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS = ''
-    $env:SCOOP_RESILIENT_TEST_LOG = $logPath
-    $env:SCOOP_RESILIENT_TEST_CORE = Join-Path $tempRoot 'core'
-    New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib') -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures/plan-core.ps1') -Destination (Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib/core.ps1')
-    $env:SCOOP_RESILIENT_TEST_WORKER_LOG = Join-Path $tempRoot 'workers.log'
-    $env:SCOOP_RESILIENT_TEST_STATUS_ERROR = ''
+    $env:SCOOP_AIRIFIED_SCOOP_COMMAND = $env:SCOOP_UPGRADE_SCOOP_COMMAND
+    $env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP = ''
+    $env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS = ''
+    $env:SCOOP_AIRIFIED_TEST_LOG = $logPath
+    $env:SCOOP_AIRIFIED_TEST_CORE = Join-Path $tempRoot 'core'
+    New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_AIRIFIED_TEST_CORE 'lib') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures/plan-core.ps1') -Destination (Join-Path $env:SCOOP_AIRIFIED_TEST_CORE 'lib/core.ps1')
+    $env:SCOOP_AIRIFIED_TEST_WORKER_LOG = Join-Path $tempRoot 'workers.log'
+    $env:SCOOP_AIRIFIED_TEST_STATUS_ERROR = ''
 
     $partialFailure = Invoke-Scenario -FailApp 'broken'
     Assert-Equal 1 $partialFailure.ExitCode 'A failed app should produce aggregate exit code 1.'
@@ -256,11 +256,11 @@ try {
     $globalOnly = Invoke-Scenario -FailApp '' -Apps 'healthy,global-one' -IsAdministrator true -CommandOptions @('-g', 'global-one', '-f')
     Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update global-one --force --global') $globalOnly.Calls 'Explicit -g must select only that global app.'
 
-    $env:SCOOP_RESILIENT_TEST_FRESH = 'true'
+    $env:SCOOP_AIRIFIED_TEST_FRESH = 'true'
     try {
         $fresh = Invoke-Scenario -FailApp '' -CommandOptions @('healthy')
         Assert-Sequence @('config last_update', 'export', 'prefix scoop', 'update healthy') $fresh.Calls 'A fresh Scoop installation must not be synchronized unconditionally.'
-    } finally { Remove-Item Env:SCOOP_RESILIENT_TEST_FRESH -ErrorAction SilentlyContinue }
+    } finally { Remove-Item Env:SCOOP_AIRIFIED_TEST_FRESH -ErrorAction SilentlyContinue }
 
     $zeroErrors = Invoke-Scenario -FailApp '' -Apps 'missing-current,stderr-success,healthy'
     Assert-Equal 1 $zeroErrors.ExitCode 'A later current message must not hide a manifest error.'
@@ -285,14 +285,14 @@ try {
     Assert-Equal 1 $jsonName.ExitCode 'A URL is not an installed-app selector.'
     Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update healthy.json') $jsonName.Calls 'Installed names ending in .json must not select a different app.'
 
-    Remove-Item -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $env:SCOOP_AIRIFIED_TEST_WORKER_LOG -ErrorAction SilentlyContinue
     $manyCurrent = (1..200 | ForEach-Object { "current-$_" }) -join ','
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $idle = Invoke-Scenario -FailApp '' -Apps $manyCurrent
     $timer.Stop()
     Assert-Equal 0 $idle.ExitCode 'An entirely current selection should succeed.'
     Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop') $idle.Calls 'Current apps must launch no individual updates.'
-    Assert-Sequence @('preflight upgrade') @(Get-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG) 'The whole selection must use one preflight process.'
+    Assert-Sequence @('preflight upgrade') @(Get-Content -LiteralPath $env:SCOOP_AIRIFIED_TEST_WORKER_LOG) 'The whole selection must use one preflight process.'
     Assert-Contains $idle.Output 'Current: 200' 'Filtered apps must still appear in summary counts.'
     Write-Host "200 current apps: one preflight, zero update workers, $($timer.ElapsedMilliseconds) ms."
 
@@ -303,17 +303,17 @@ try {
     $forced = Invoke-Scenario -FailApp '' -Apps 'current-one,held' -CommandOptions @('-af')
     Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update current-one --force') $forced.Calls 'Force must include current apps but preserve holds.'
 
-    $env:SCOOP_RESILIENT_TEST_STATUS_ERROR = 'current-one'
+    $env:SCOOP_AIRIFIED_TEST_STATUS_ERROR = 'current-one'
     try {
         $unknown = Invoke-Scenario -FailApp '' -Apps 'current-one,healthy'
         Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop', 'update current-one', 'update healthy') $unknown.Calls 'Inconclusive status must be diagnosed by a worker.'
-    } finally { $env:SCOOP_RESILIENT_TEST_STATUS_ERROR = '' }
+    } finally { $env:SCOOP_AIRIFIED_TEST_STATUS_ERROR = '' }
 
     $globalCurrent = Invoke-Scenario -FailApp '' -Apps 'global-current-one' -IsAdministrator false -ElevationResponse 'y' -ElevationState Failed -CommandOptions @('-ag')
     Assert-Equal 0 $globalCurrent.ExitCode 'Current global apps must not require elevation.'
     Assert-Sequence @('config last_update', 'update', 'export', 'prefix scoop') $globalCurrent.Calls 'Current globals must launch no worker.'
 
-    $corePath = Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib/core.ps1'
+    $corePath = Join-Path $env:SCOOP_AIRIFIED_TEST_CORE 'lib/core.ps1'
     $coreText = Get-Content -LiteralPath $corePath -Raw
     try {
         Set-Content -LiteralPath $corePath -Value "throw 'Injected planner failure'"
@@ -326,22 +326,22 @@ try {
     Write-Host 'All scoop-upgrade integration tests passed.' -ForegroundColor Green
 } finally {
     $environment = @{
-        SCOOP_RESILIENT_TEST_CORE = $previousCore
-        SCOOP_RESILIENT_TEST_WORKER_LOG = $previousWorkerLog
-        SCOOP_RESILIENT_TEST_STATUS_ERROR = $previousStatusError
+        SCOOP_AIRIFIED_TEST_CORE = $previousCore
+        SCOOP_AIRIFIED_TEST_WORKER_LOG = $previousWorkerLog
+        SCOOP_AIRIFIED_TEST_STATUS_ERROR = $previousStatusError
         SCOOP_UPGRADE_SCOOP_COMMAND = $previousCommand
-        SCOOP_RESILIENT_SCOOP_COMMAND = $previousToolsCommand
-        SCOOP_RESILIENT_TEST_NATIVE_SCOOP = $previousNativeScoop
-        SCOOP_RESILIENT_TEST_GLOBAL_APPS = $previousGlobalApps
-        SCOOP_RESILIENT_TEST_LOG = $previousLog
-        SCOOP_RESILIENT_TEST_FAIL_APP = $previousFailApp
-        SCOOP_RESILIENT_TEST_EXPORT_FAILURE = $previousExportFailure
-        SCOOP_RESILIENT_TEST_SYNC_FAILURE = $previousSyncFailure
-        SCOOP_RESILIENT_TEST_APPS = $previousApps
-        SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = $previousIsAdministrator
-        SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE = $previousElevationResponse
-        SCOOP_RESILIENT_TEST_ELEVATION_STATE = $previousElevationState
-        SCOOP_RESILIENT_TEST_ELEVATION_BYPASS = $previousElevationBypass
+        SCOOP_AIRIFIED_SCOOP_COMMAND = $previousToolsCommand
+        SCOOP_AIRIFIED_TEST_NATIVE_SCOOP = $previousNativeScoop
+        SCOOP_AIRIFIED_TEST_GLOBAL_APPS = $previousGlobalApps
+        SCOOP_AIRIFIED_TEST_LOG = $previousLog
+        SCOOP_AIRIFIED_TEST_FAIL_APP = $previousFailApp
+        SCOOP_AIRIFIED_TEST_EXPORT_FAILURE = $previousExportFailure
+        SCOOP_AIRIFIED_TEST_SYNC_FAILURE = $previousSyncFailure
+        SCOOP_AIRIFIED_TEST_APPS = $previousApps
+        SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = $previousIsAdministrator
+        SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE = $previousElevationResponse
+        SCOOP_AIRIFIED_TEST_ELEVATION_STATE = $previousElevationState
+        SCOOP_AIRIFIED_TEST_ELEVATION_BYPASS = $previousElevationBypass
     }
     foreach ($entry in $environment.GetEnumerator()) {
         if ($null -eq $entry.Value) {

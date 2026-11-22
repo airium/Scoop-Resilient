@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
+  "version": "0.3.0",
+  "description": "Resilient Scoop update and cleanup commands",
+  "homepage": "https://github.com/airium/scoop-airified",
+  "license": "MIT",
+  "url": "https://github.com/airium/scoop-airified/releases/download/v0.3.0/scoop-airified-0.3.0.zip",
+  "hash": "703c2f09e80d9b751a5fcbbf7d08e49d3b5fc7c413b6c0dcd4d077db17a7aa39",
+  "bin": [
+    "scoop-upgrade.ps1",
+    "scoop-tidy.ps1"
+  ],
+  "post_install": "& \"$dir\\lib\\register-shims.ps1\" -InstallDirectory $dir -ShimDirectory (shimdir $global)",
+  "checkver": {
+    "github": "https://github.com/airium/scoop-airified"
+  },
+  "autoupdate": {
+    "url": "https://github.com/airium/scoop-airified/releases/download/v$version/scoop-airified-$version.zip"
+  }
+}

@@ -220,9 +220,9 @@ function Invoke-TidyWorker {
     $results = [System.Collections.Generic.List[object]]::new()
     try {
         $request = Get-Content -LiteralPath $RequestPath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
-        if ($env:SCOOP_RESILIENT_TEST_WORKER_LOG) {
+        if ($env:SCOOP_AIRIFIED_TEST_WORKER_LOG) {
             $kind = if ($request.PartialDownloads) { 'partial-downloads' } else { "$($request.Global)/$($request.Name)" }
-            Add-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG -Value "tidy $kind"
+            Add-Content -LiteralPath $env:SCOOP_AIRIFIED_TEST_WORKER_LOG -Value "tidy $kind"
         }
         if (!$request.PartialDownloads -and ([string]$request.Name -notmatch '^[A-Za-z0-9_.-]+$' -or $request.Name -in @('.', '..', 'scoop'))) {
             throw 'Invalid cleanup app name.'

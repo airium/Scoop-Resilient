@@ -5,10 +5,10 @@ $project = Split-Path -Parent $PSScriptRoot
 $hostExecutable = (Get-Process -Id $PID).Path
 $temp = Join-Path ([IO.Path]::GetTempPath()) "scoop tidy tests $PID $([Guid]::NewGuid().ToString('N'))"
 $log = Join-Path $temp 'calls.log'
-$variables = @('SCOOP_UPGRADE_SCOOP_COMMAND', 'SCOOP_RESILIENT_SCOOP_COMMAND', 'SCOOP_RESILIENT_TEST_LOG', 'SCOOP_RESILIENT_TEST_APPS',
-    'SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR', 'SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE', 'SCOOP_RESILIENT_TEST_ELEVATION_BYPASS',
-    'SCOOP_RESILIENT_TEST_ROOT', 'SCOOP_RESILIENT_TEST_CORE', 'SCOOP_RESILIENT_TEST_GLOBAL_APPS',
-    'SCOOP_RESILIENT_TEST_NO_JUNCTION', 'SCOOP_RESILIENT_TEST_DELETE_FAILURE', 'SCOOP_RESILIENT_TEST_NATIVE_SCOOP', 'SCOOP_RESILIENT_TEST_WORKER_LOG',
+$variables = @('SCOOP_UPGRADE_SCOOP_COMMAND', 'SCOOP_AIRIFIED_SCOOP_COMMAND', 'SCOOP_AIRIFIED_TEST_LOG', 'SCOOP_AIRIFIED_TEST_APPS',
+    'SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR', 'SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE', 'SCOOP_AIRIFIED_TEST_ELEVATION_BYPASS',
+    'SCOOP_AIRIFIED_TEST_ROOT', 'SCOOP_AIRIFIED_TEST_CORE', 'SCOOP_AIRIFIED_TEST_GLOBAL_APPS',
+    'SCOOP_AIRIFIED_TEST_NO_JUNCTION', 'SCOOP_AIRIFIED_TEST_DELETE_FAILURE', 'SCOOP_AIRIFIED_TEST_NATIVE_SCOOP', 'SCOOP_AIRIFIED_TEST_WORKER_LOG',
     'SCOOP', 'SCOOP_GLOBAL', 'SCOOP_CACHE', 'XDG_CONFIG_HOME')
 $previous = @{}
 foreach ($name in $variables) { $previous[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -30,7 +30,7 @@ function New-TestLink {
 function New-TestApp {
     param([string] $Name, [switch] $Global, [string] $Version = '2.0', [switch] $Legacy, [switch] $NoLink)
     $scope = if ($Global) { 'global' } else { 'local' }
-    $app = Join-Path (Join-Path (Join-Path $env:SCOOP_RESILIENT_TEST_ROOT $scope) 'apps') $Name
+    $app = Join-Path (Join-Path (Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT $scope) 'apps') $Name
     foreach ($old in @('1.0', '1.5')) { New-TestFile -Path (Join-Path (Join-Path $app $old) 'old.txt') }
     $active = Join-Path $app $Version
     $prefix = if ($Legacy) { '' } else { 'scoop-' }
@@ -44,17 +44,17 @@ function Reset-TestInstallation {
     param([string] $Apps = 'broken,healthy')
     # Each scenario gets a fresh tree. Do not recursively delete a tree containing
     # junctions: cleanup itself is also used by the test teardown below.
-    $env:SCOOP_RESILIENT_TEST_ROOT = Join-Path $temp ([Guid]::NewGuid().ToString('N'))
-    $env:SCOOP_RESILIENT_TEST_APPS = $Apps
-    $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = 'false'
-    $env:SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE = ''
-    $env:SCOOP_RESILIENT_TEST_ELEVATION_BYPASS = ''
-    $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS = ''
-    $env:SCOOP_RESILIENT_TEST_NO_JUNCTION = ''
-    $env:SCOOP_RESILIENT_TEST_DELETE_FAILURE = ''
-    $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP = ''
-    New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache') -Force | Out-Null
-    $env:SCOOP_RESILIENT_TEST_WORKER_LOG = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'workers.log'
+    $env:SCOOP_AIRIFIED_TEST_ROOT = Join-Path $temp ([Guid]::NewGuid().ToString('N'))
+    $env:SCOOP_AIRIFIED_TEST_APPS = $Apps
+    $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = 'false'
+    $env:SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE = ''
+    $env:SCOOP_AIRIFIED_TEST_ELEVATION_BYPASS = ''
+    $env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS = ''
+    $env:SCOOP_AIRIFIED_TEST_NO_JUNCTION = ''
+    $env:SCOOP_AIRIFIED_TEST_DELETE_FAILURE = ''
+    $env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP = ''
+    New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache') -Force | Out-Null
+    $env:SCOOP_AIRIFIED_TEST_WORKER_LOG = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'workers.log'
 }
 function Invoke-TestTidy {
     param([string[]] $Options = @('-a'))
@@ -66,9 +66,9 @@ function Invoke-TestTidy {
 
 New-Item -ItemType Directory -Path $temp | Out-Null
 try {
-    $env:SCOOP_RESILIENT_TEST_CORE = Join-Path $temp 'core'
-    New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib') -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures/tidy-core.ps1') -Destination (Join-Path $env:SCOOP_RESILIENT_TEST_CORE 'lib/core.ps1')
+    $env:SCOOP_AIRIFIED_TEST_CORE = Join-Path $temp 'core'
+    New-Item -ItemType Directory -Path (Join-Path $env:SCOOP_AIRIFIED_TEST_CORE 'lib') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures/tidy-core.ps1') -Destination (Join-Path $env:SCOOP_AIRIFIED_TEST_CORE 'lib/core.ps1')
     $fixture = Join-Path $PSScriptRoot 'fixtures/fake-scoop.ps1'
     if ($env:OS -eq 'Windows_NT') {
         $launcher = Join-Path $temp 'scoop.cmd'
@@ -79,13 +79,13 @@ try {
         & chmod +x $launcher
     }
     $env:SCOOP_UPGRADE_SCOOP_COMMAND = $launcher
-    $env:SCOOP_RESILIENT_SCOOP_COMMAND = $launcher
-    $env:SCOOP_RESILIENT_TEST_LOG = $log
+    $env:SCOOP_AIRIFIED_SCOOP_COMMAND = $launcher
+    $env:SCOOP_AIRIFIED_TEST_LOG = $log
 
     Reset-TestInstallation
     $broken = New-TestApp broken
     $healthy = New-TestApp healthy -Legacy
-    $env:SCOOP_RESILIENT_TEST_DELETE_FAILURE = '/broken/1\.0/'
+    $env:SCOOP_AIRIFIED_TEST_DELETE_FAILURE = '/broken/1\.0/'
     $result = Invoke-TestTidy
     Assert-Tidy ($result.Code -eq 1) $result.Output
     Assert-Tidy (Test-Path (Join-Path $broken '1.0/old.txt')) 'Failed version must remain.'
@@ -95,7 +95,7 @@ try {
 
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
-    $persist = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'persist/settings'
+    $persist = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'persist/settings'
     New-TestFile -Path (Join-Path $persist 'settings.txt') -Contents 'persistent sentinel'
     New-TestLink -Path (Join-Path $healthy '1.0/settings') -Target $persist
     $hardLink = Join-Path $healthy '1.5/settings.txt'
@@ -108,9 +108,9 @@ try {
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
     $null = New-TestApp healthy -Global -Version '3.0'
-    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
     foreach ($name in @('healthy#1.0#lock.zip', 'healthy#1.5#remove.zip', 'healthy#2.0#keep.zip', 'healthy#3.0#keep.zip', 'orphan.download', 'other#1.0#keep.zip')) { New-TestFile -Path (Join-Path $cache $name) }
-    $env:SCOOP_RESILIENT_TEST_DELETE_FAILURE = 'healthy#1\.0#'
+    $env:SCOOP_AIRIFIED_TEST_DELETE_FAILURE = 'healthy#1\.0#'
     $result = Invoke-TestTidy -Options @('-ak')
     Assert-Tidy ($result.Code -eq 1) $result.Output
     Assert-Tidy (Test-Path (Join-Path $cache 'healthy#1.0#lock.zip')) 'Failed cache removal should remain and report failure.'
@@ -136,7 +136,7 @@ try {
     Assert-Tidy (!(Test-Path (Join-Path $damaged '1.0'))) 'Export repair flags alone must not prevent safe cleanup with valid current metadata.'
 
     Reset-TestInstallation 'healthy'
-    $env:SCOOP_RESILIENT_TEST_NO_JUNCTION = 'true'
+    $env:SCOOP_AIRIFIED_TEST_NO_JUNCTION = 'true'
     $healthy = New-TestApp healthy -NoLink -Legacy
     $result = Invoke-TestTidy
     Assert-Tidy ($result.Code -eq 0) $result.Output
@@ -148,12 +148,12 @@ try {
     Reset-TestInstallation 'windowsdesktop-runtime-8.0'
     $runtime = New-TestApp windowsdesktop-runtime-8.0 -NoLink -Version '8.0.20'
     $globalRuntime = New-TestApp windowsdesktop-runtime-8.0 -Global -NoLink -Legacy -Version '8.0.19'
-    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
     foreach ($file in @('windowsdesktop-runtime-8.0#8.0.18#old.exe', 'windowsdesktop-runtime-8.0#8.0.19#global.exe', 'windowsdesktop-runtime-8.0#8.0.20#local.exe')) {
         New-TestFile -Path (Join-Path $cache $file)
     }
-    $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS = 'windowsdesktop-runtime-8.0'
-    $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = 'true'
+    $env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS = 'windowsdesktop-runtime-8.0'
+    $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = 'true'
     $result = Invoke-TestTidy -Options @('-agk')
     Assert-Tidy ($result.Code -eq 0 -and !$result.Output.Contains('[Metadata]')) $result.Output
     Assert-Tidy (Test-Path (Join-Path $runtime '8.0.20/active.txt')) 'Missing-link cleanup must retain the completed local installation.'
@@ -197,7 +197,7 @@ try {
                 [IO.Directory]::Delete($target, $false)
             }
         }
-        $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+        $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
         New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain.zip')
         $result = Invoke-TestTidy -Options @('-ak')
         # PS 5.1 may not resolve dangling junctions with Get-Item during teardown.
@@ -212,7 +212,7 @@ try {
     }
 
     Reset-TestInstallation 'healthy'
-    $env:SCOOP_RESILIENT_TEST_NO_JUNCTION = 'true'
+    $env:SCOOP_AIRIFIED_TEST_NO_JUNCTION = 'true'
     $healthy = New-TestApp healthy -NoLink
     New-TestFile -Path (Join-Path $healthy '1.0/scoop-install.json') -Contents '{"architecture":"64bit"}'
     New-TestFile -Path (Join-Path $healthy '1.0/scoop-manifest.json') -Contents '{"version":"1.0"}'
@@ -224,7 +224,7 @@ try {
     Assert-Tidy (Test-Path (Join-Path $healthy '1.0')) 'Ambiguous NO_JUNCTION selection must preserve all versions.'
 
     Reset-TestInstallation 'healthy'
-    $env:SCOOP_RESILIENT_TEST_NO_JUNCTION = 'true'
+    $env:SCOOP_AIRIFIED_TEST_NO_JUNCTION = 'true'
     $healthy = New-TestApp healthy
     [IO.Directory]::Delete((Join-Path $healthy 'current'), $false)
     New-TestLink -Path (Join-Path $healthy 'current') -Target (Join-Path $healthy '1.0')
@@ -239,8 +239,8 @@ try {
     Assert-Tidy (Test-Path (Join-Path $global '1.0')) 'All without -g must preserve global installations.'
     $result = Invoke-TestTidy -Options @('-ag', '--no-elevation-prompt')
     Assert-Tidy ($result.Output.Contains('[Elevation]')) 'Global apps should explain skipped elevation.'
-    $env:SCOOP_RESILIENT_TEST_ELEVATION_RESPONSE = 'y'
-    $env:SCOOP_RESILIENT_TEST_ELEVATION_BYPASS = 'true'
+    $env:SCOOP_AIRIFIED_TEST_ELEVATION_RESPONSE = 'y'
+    $env:SCOOP_AIRIFIED_TEST_ELEVATION_BYPASS = 'true'
     $result = Invoke-TestTidy -Options @('-ag')
     Assert-Tidy ($result.Code -eq 0) $result.Output
     Assert-Tidy (!(Test-Path (Join-Path $global '1.0'))) 'The elevated batch should perform global cleanup.'
@@ -274,7 +274,7 @@ try {
 
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
-    $outside = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'outside/2.0'
+    $outside = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'outside/2.0'
     New-TestFile -Path (Join-Path $outside 'scoop-manifest.json') -Contents '{"version":"2.0"}'
     New-TestFile -Path (Join-Path $outside 'sentinel.txt')
     [IO.Directory]::Delete((Join-Path $healthy 'current'), $false)
@@ -288,8 +288,8 @@ try {
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
     $global = New-TestApp healthy -Global -Version '3.0'
-    $env:SCOOP_RESILIENT_TEST_GLOBAL_APPS = 'healthy'
-    $env:SCOOP_RESILIENT_TEST_IS_ADMINISTRATOR = 'true'
+    $env:SCOOP_AIRIFIED_TEST_GLOBAL_APPS = 'healthy'
+    $env:SCOOP_AIRIFIED_TEST_IS_ADMINISTRATOR = 'true'
     $result = Invoke-TestTidy -Options @('healthy', '-g')
     Assert-Tidy ($result.Code -eq 0) $result.Output
     Assert-Tidy (Test-Path (Join-Path $healthy '1.0')) 'Explicit -g must retain the local installation.'
@@ -299,7 +299,7 @@ try {
     $healthy = New-TestApp healthy
     $global = New-TestApp healthy -Global
     New-TestFile -Path (Join-Path $global '2.0/scoop-manifest.json') -Contents '{invalid'
-    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
     New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain.zip')
     $result = Invoke-TestTidy -Options @('-ak')
     Assert-Tidy ($result.Code -eq 0) $result.Output
@@ -311,22 +311,22 @@ try {
     if (Test-Path (Join-Path $realCore 'lib/core.ps1')) {
         Reset-TestInstallation 'healthy'
         $healthy = New-TestApp healthy
-        $previousCore = $env:SCOOP_RESILIENT_TEST_CORE
-        $env:SCOOP_RESILIENT_TEST_CORE = $realCore
-        $env:SCOOP = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'local'
-        $env:SCOOP_GLOBAL = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'global'
-        $env:SCOOP_CACHE = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
-        $env:XDG_CONFIG_HOME = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'config'
+        $previousCore = $env:SCOOP_AIRIFIED_TEST_CORE
+        $env:SCOOP_AIRIFIED_TEST_CORE = $realCore
+        $env:SCOOP = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'local'
+        $env:SCOOP_GLOBAL = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'global'
+        $env:SCOOP_CACHE = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
+        $env:XDG_CONFIG_HOME = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'config'
         $result = Invoke-TestTidy
         Assert-Tidy ($result.Code -eq 0) $result.Output
         Assert-Tidy (!(Test-Path (Join-Path $healthy '1.0'))) 'The actual installed Scoop core must supply usable configured paths.'
         Assert-Tidy (Test-Path (Join-Path $healthy 'current/active.txt')) 'Actual Scoop core integration must preserve current data.'
         if ($env:OS -eq 'Windows_NT') {
             Reset-TestInstallation
-            $env:SCOOP = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'local'
-            $env:SCOOP_GLOBAL = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'global'
-            $env:SCOOP_CACHE = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
-            $env:XDG_CONFIG_HOME = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'config'
+            $env:SCOOP = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'local'
+            $env:SCOOP_GLOBAL = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'global'
+            $env:SCOOP_CACHE = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
+            $env:XDG_CONFIG_HOME = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'config'
             $broken = New-TestApp broken -Version '1.0'
             $healthy = New-TestApp healthy
             New-Item -ItemType Directory -Path (Join-Path $env:SCOOP 'apps/scoop') -Force | Out-Null
@@ -351,20 +351,20 @@ try {
             Assert-Tidy ($LASTEXITCODE -eq 0) 'Could not stage the fixture bucket manifests.'
             # export reads the bucket's last commit date. An unborn repository
             # makes git log print a fatal error, corrupting the exported JSON.
-            & git -C $main -c user.name='Scoop-Resilient tests' -c user.email='scoop-resilient@example.invalid' -c commit.gpgsign=false commit --quiet -m 'test: initialize fixture bucket'
+            & git -C $main -c user.name='scoop-airified tests' -c user.email='scoop-airified@example.invalid' -c commit.gpgsign=false commit --quiet -m 'test: initialize fixture bucket'
             Assert-Tidy ($LASTEXITCODE -eq 0) 'Could not create the fixture bucket commit.'
             # Scoop 0.6.0 recognizes legacy cache names, so this bad cached file
             # triggers its real hash-abort path without any download.
             New-TestFile -Path (Join-Path $env:SCOOP_CACHE 'broken#2.0#https_example.invalid_broken.zip') -Contents 'injected hash mismatch'
-            $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP = Join-Path $realCore 'bin/scoop.ps1'
+            $env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP = Join-Path $realCore 'bin/scoop.ps1'
             $output = @(& $hostExecutable -NoProfile -File (Join-Path $project 'scoop-upgrade.ps1') broken healthy 2>&1)
             $code = $LASTEXITCODE
             Assert-Tidy ($code -eq 1) ($output -join "`n")
             Assert-Tidy (($output -join "`n").Contains('broken [Hash]')) 'Actual Scoop hash errors must be classified.'
             Assert-Tidy (($output -join "`n").Contains('healthy [Current]')) 'Actual Scoop abort must not block the next app.'
-            $env:SCOOP_RESILIENT_TEST_NATIVE_SCOOP = ''
+            $env:SCOOP_AIRIFIED_TEST_NATIVE_SCOOP = ''
         }
-        $env:SCOOP_RESILIENT_TEST_CORE = $previousCore
+        $env:SCOOP_AIRIFIED_TEST_CORE = $previousCore
         foreach ($name in @('SCOOP', 'SCOOP_GLOBAL', 'SCOOP_CACHE', 'XDG_CONFIG_HOME')) { [Environment]::SetEnvironmentVariable($name, $previous[$name]) }
     }
 
@@ -390,18 +390,18 @@ try {
     $result = Invoke-TestTidy -Options @('-ak')
     $timer.Stop()
     Assert-Tidy ($result.Code -eq 0) $result.Output
-    $trace = @(Get-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG)
+    $trace = @(Get-Content -LiteralPath $env:SCOOP_AIRIFIED_TEST_WORKER_LOG)
     Assert-Tidy (($trace -join '|') -eq 'preflight tidy|cache-scan') 'An entirely clean selection should use one preflight, one cache scan, and zero cleanup workers.'
     Assert-Tidy ($result.Output.Contains('Current: 50')) 'Clean apps must retain accurate summary counts.'
     Write-Host "50 clean apps: one preflight, zero tidy workers, $($timer.ElapsedMilliseconds) ms."
 
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
-    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
     foreach ($file in @('healthy#1.0#old.zip', 'healthy#2.0#keep.zip', 'orphan.download')) { New-TestFile -Path (Join-Path $cache $file) }
     $result = Invoke-TestTidy -Options @('-ak')
     Assert-Tidy ($result.Code -eq 0) $result.Output
-    $trace = @(Get-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG)
+    $trace = @(Get-Content -LiteralPath $env:SCOOP_AIRIFIED_TEST_WORKER_LOG)
     Assert-Tidy (@($trace | Where-Object { $_ -eq 'cache-scan' }).Count -eq 1) 'A mixed batch must scan cache once.'
     Assert-Tidy (@($trace | Where-Object { $_ -like 'tidy *' }).Count -eq 2) 'Only the app cleanup and partial download job should launch workers.'
     Assert-Tidy (Test-Path (Join-Path $cache 'healthy#2.0#keep.zip')) 'Planned cleanup must protect active cache files.'
@@ -409,7 +409,7 @@ try {
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
     Remove-Item -LiteralPath (Join-Path $healthy '1.0'), (Join-Path $healthy '1.5') -Recurse -Force
-    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
     New-TestFile -Path (Join-Path $cache 'healthy#1.0#old.zip')
     $result = Invoke-TestTidy -Options @('-ak')
     Assert-Tidy ($result.Code -eq 0) $result.Output
@@ -417,13 +417,13 @@ try {
 
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy
-    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
     New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain-after-switch.zip')
     . (Join-Path $project 'lib/common.ps1')
     . (Join-Path $project 'lib/commands.ps1')
     $script:EntryPoint = Join-Path $project 'scoop-tidy.ps1'
     $script:Operation = 'tidy'
-    $script:CoreDirectory = $env:SCOOP_RESILIENT_TEST_CORE
+    $script:CoreDirectory = $env:SCOOP_AIRIFIED_TEST_CORE
     $script:ForwardOptions = @('--cache')
     $plan = Invoke-PreflightProcess -Targets @([PSCustomObject]@{ Name = 'healthy'; Global = $false; Info = '' })
     Assert-Tidy ($null -ne $plan -and $plan.Jobs.Count -eq 1) 'Expected one planned job before changing state.'
@@ -442,7 +442,7 @@ try {
 
     Reset-TestInstallation 'healthy'
     $healthy = New-TestApp healthy -NoLink
-    $cache = Join-Path $env:SCOOP_RESILIENT_TEST_ROOT 'cache'
+    $cache = Join-Path $env:SCOOP_AIRIFIED_TEST_ROOT 'cache'
     New-TestFile -Path (Join-Path $cache 'healthy#1.0#retain-after-switch.zip')
     $plan = Invoke-PreflightProcess -Targets @([PSCustomObject]@{ Name = 'healthy'; Global = $false; Info = '' })
     Assert-Tidy ($null -ne $plan -and $plan.Jobs.Count -eq 1) 'Expected one missing-link cleanup job before changing metadata.'

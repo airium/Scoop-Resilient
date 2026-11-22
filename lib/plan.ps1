@@ -8,7 +8,7 @@ function Invoke-PreflightWorker {
         $request = Get-Content -LiteralPath $RequestPath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
         $script:Operation = [string]$request.Operation
         if ($script:Operation -notin @('upgrade', 'tidy')) { throw 'Invalid planning operation.' }
-        if ($env:SCOOP_RESILIENT_TEST_WORKER_LOG) { Add-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG -Value "preflight $script:Operation" }
+        if ($env:SCOOP_AIRIFIED_TEST_WORKER_LOG) { Add-Content -LiteralPath $env:SCOOP_AIRIFIED_TEST_WORKER_LOG -Value "preflight $script:Operation" }
         $core = [string]$request.CoreDirectory
         Set-StrictMode -Off
         . (Join-Path $core 'lib/core.ps1')
@@ -57,7 +57,7 @@ function Invoke-PreflightWorker {
                 try {
                     if (Test-Path -LiteralPath $cachedir -PathType Container -ErrorAction Stop) {
                         $cacheScans = 1
-                        if ($env:SCOOP_RESILIENT_TEST_WORKER_LOG) { Add-Content -LiteralPath $env:SCOOP_RESILIENT_TEST_WORKER_LOG -Value 'cache-scan' }
+                        if ($env:SCOOP_AIRIFIED_TEST_WORKER_LOG) { Add-Content -LiteralPath $env:SCOOP_AIRIFIED_TEST_WORKER_LOG -Value 'cache-scan' }
                         foreach ($file in Get-ChildItem -LiteralPath $cachedir -File -Force -ErrorAction Stop) {
                             if ($file.Name.EndsWith('.download', [StringComparison]::OrdinalIgnoreCase)) { $partials += $file.Name; continue }
                             $name = ($file.Name -split '#', 2)[0]

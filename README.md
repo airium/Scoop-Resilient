@@ -1,4 +1,4 @@
-# Scoop-Resilient
+# scoop-airified
 
 Two Scoop subcommands with failure isolation:
 
@@ -8,17 +8,15 @@ Two Scoop subcommands with failure isolation:
   and cache file separately, so one failed deletion cannot stop the cleanup batch.
 
 Both commands run sequentially, retain diagnostics, and finish with a summary.
-The [Scoop-Resilient repository](https://github.com/airium/Scoop-Resilient) provides
-the `scoop-resilient` package, which installs both command shims and their shared
-libraries.
+The `scoop-airified` package installs both command shims and their shared libraries.
 
 ## Bucket installation
 
 Install both commands from the bucket:
 
 ```powershell
-scoop bucket add scoop-resilient https://github.com/airium/Scoop-Resilient
-scoop install scoop-resilient/scoop-resilient
+scoop bucket add scoop-airified https://github.com/airium/scoop-airified
+scoop install scoop-airified/scoop-airified
 ```
 
 Then update apps and remove old versions/cache with:
@@ -27,6 +25,54 @@ Then update apps and remove old versions/cache with:
 scoop upgrade -a
 scoop tidy -ak
 ```
+
+### Migrating from Scoop-Resilient
+
+Scoop treats `scoop-airified` as a new package, so `scoop update scoop-resilient`
+will not migrate it. Wait until [v0.3.0](https://github.com/airium/scoop-airified/releases/tag/v0.3.0)
+and its `scoop-airified-0.3.0.zip` asset are available. Then, in PowerShell:
+
+1. Check the old package's installation scope and bucket alias:
+
+   ```powershell
+   scoop list scoop-resilient
+   scoop bucket list
+   ```
+
+2. Uninstall the old package **before** installing the new one. Both packages
+   register the same `scoop upgrade` and `scoop tidy` shims.
+
+   ```powershell
+   scoop uninstall scoop-resilient
+   scoop bucket rm scoop-resilient
+   ```
+
+   If `scoop list` showed `Global install`, use `scoop uninstall scoop-resilient -g`
+   in an elevated PowerShell. If both scopes are installed, uninstall both before
+   removing the bucket. Use the alias from `scoop bucket list` if it differs from
+   `scoop-resilient`.
+
+3. Add the renamed bucket and install the new package:
+
+   ```powershell
+   scoop bucket add scoop-airified https://github.com/airium/scoop-airified
+   scoop install scoop-airified/scoop-airified
+   ```
+
+   To keep a global installation, add `-g` to `scoop install` in an elevated
+   PowerShell.
+
+4. Verify the version and both commands without changing anything:
+
+   ```powershell
+   scoop list scoop-airified
+   scoop upgrade --help
+   scoop tidy --help
+   ```
+
+   `scoop list` should show `0.3.0` or later. The command names haven't changed.
+   Optionally, run `scoop cache rm scoop-resilient` to clear only the old package's
+   cached downloads. Your other Scoop apps and their data are unaffected.
 
 ## Upgrade
 
@@ -205,19 +251,19 @@ Remove the development shims with `scoop shim rm scoop-upgrade` and
 Generate the bundle and matching manifest:
 
 ```powershell
-./scripts/new-manifest.ps1 -Version 0.2.3 -License MIT
+./scripts/new-manifest.ps1 -Version 0.3.0 -License MIT
 ```
 
-This creates `dist/scoop-resilient-0.2.3.zip` and `bucket/scoop-resilient.json`. The archive
+This creates `dist/scoop-airified-0.3.0.zip` and `bucket/scoop-airified.json`. The archive
 contains both entry scripts, shared libraries, and this README. The manifest
 hashes that exact archive and references the corresponding GitHub release asset.
-Upload that same archive as `scoop-resilient-0.2.3.zip` to the `v0.2.3` release after
+Upload that same archive as `scoop-airified-0.3.0.zip` to the `v0.3.0` release after
 committing the source/manifest and pushing the tag. Regenerating an archive can
 change its hash; regenerate the manifest too, or pass `-ArchivePath` to hash an
 already-built archive. `dist` is ignored by Git.
 
-`origin` points to `git@github.com:airium/Scoop-Resilient.git`, so the generator
-derives `airium/Scoop-Resilient` automatically. Use `-Repository OWNER/Scoop-Resilient`
+`origin` points to `git@github.com:airium/scoop-airified.git`, so the generator
+derives `airium/scoop-airified` automatically. Use `-Repository OWNER/scoop-airified`
 to build for another repository. The package is released under the MIT license;
 the archive includes [LICENSE](LICENSE). These scripts build local files; they
 do not create a GitHub release or push a tag.

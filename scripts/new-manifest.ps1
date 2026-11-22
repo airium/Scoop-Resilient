@@ -26,7 +26,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 if (!$Repository) {
     $remote = (& git -C $projectRoot config --get remote.origin.url) -join ''
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remote)) {
-        throw "No origin remote is configured. Pass -Repository OWNER/Scoop-Resilient explicitly."
+        throw "No origin remote is configured. Pass -Repository OWNER/scoop-airified explicitly."
     }
 
     if ($remote.Trim() -notmatch 'github\.com[/:](?<owner>[A-Za-z0-9_.-]+)/(?<name>[A-Za-z0-9_.-]+?)(?:\.git)?/?$') {
@@ -38,10 +38,10 @@ if (!$Repository) {
 $normalizedVersion = $Version -replace '^v', ''
 $tag = "v$normalizedVersion"
 $homepage = "https://github.com/$Repository"
-$downloadUrl = "$homepage/releases/download/$tag/scoop-resilient-$normalizedVersion.zip"
-$autoupdateUrl = "$homepage/releases/download/v`$version/scoop-resilient-`$version.zip"
+$downloadUrl = "$homepage/releases/download/$tag/scoop-airified-$normalizedVersion.zip"
+$autoupdateUrl = "$homepage/releases/download/v`$version/scoop-airified-`$version.zip"
 if (!$ArchivePath) {
-    $ArchivePath = Join-Path $projectRoot "dist/scoop-resilient-$normalizedVersion.zip"
+    $ArchivePath = Join-Path $projectRoot "dist/scoop-airified-$normalizedVersion.zip"
     & "$PSScriptRoot/build-release.ps1" -Version $normalizedVersion -OutputPath $ArchivePath
 }
 $hash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -65,7 +65,7 @@ $manifest = [ordered]@{
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $OutputPath = Join-Path $projectRoot 'bucket/scoop-resilient.json'
+    $OutputPath = Join-Path $projectRoot 'bucket/scoop-airified.json'
 } elseif (![IO.Path]::IsPathRooted($OutputPath)) {
     $OutputPath = Join-Path $projectRoot $OutputPath
 }
